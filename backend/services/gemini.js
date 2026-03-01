@@ -44,21 +44,6 @@ const SEARCH_TOOL = {
   },
 };
 
-const AGENT_EXTRACT_PROMPT = `You are a shopping assistant that helps users find and purchase items they see in YouTube videos.
-
-Analyze this video screenshot and list 5-8 distinct purchasable items.
-
-Return ONLY a JSON array with objects in this shape:
-[
-  { "item": "short item label", "confidence": 0.0-1.0 }
-]
-
-Rules:
-- Only physical products that can be purchased
-- Use short, concrete labels (e.g., "black graphic tee", "brown leather tote bag")
-- Confidence is how sure you are the item is visible
-- No extra text, only valid JSON`;
-
 const AGENT_PROMPT = `You are a shopping assistant that helps users find and purchase items they see in YouTube videos.
 
 Analyze this video screenshot carefully. Your task is to:
@@ -82,9 +67,6 @@ Make exactly 5-8 function calls, one for each distinct item you identify.`;
 
 export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
   const productSource = normalizeProductSource(options.productSource);
-  const frameItems = await extractFrameItems(imagePath);
-
-  console.log(`[Gemini] Extracted ${frameItems.length} frame items`);
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.0-flash',
@@ -111,8 +93,10 @@ export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
 
   const response = result.response;
   const functionCalls = extractFunctionCalls(response);
+  const frameItems = extractFrameItemsFromCalls(functionCalls);
 
   console.log(`[Gemini] Received ${functionCalls.length} function calls`);
+  console.log(`[Gemini] Extracted ${frameItems.length} frame items`);
 
   // Execute all function calls in parallel
   const searchResults = await Promise.all(
@@ -135,42 +119,6 @@ export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
     frameItems,
     results,
   };
-}
-
-async function extractFrameItems(imagePath) {
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-  });
-
-  const imageData = fs.readFileSync(imagePath);
-  const base64Image = imageData.toString('base64');
-  const ext = path.extname(imagePath).toLowerCase();
-  const mimeType = MIME_TYPES[ext] || 'image/jpeg';
-
-  console.log('[Gemini] Extracting frame items...');
-
-  const result = await model.generateContent([
-    AGENT_EXTRACT_PROMPT,
-    {
-      inlineData: {
-        mimeType,
-        data: base64Image,
-      },
-    },
-  ]);
-
-  const text = result.response?.text?.() || '';
-  const items = parseJsonArray(text);
-
-  if (!Array.isArray(items)) return [];
-
-  return items
-    .filter(item => item && item.item)
-    .slice(0, 8)
-    .map(item => ({
-      item: String(item.item).trim(),
-      confidence: toConfidence(item.confidence),
-    }));
 }
 
 function buildRankedResults(functionCalls, searchResults) {
@@ -211,6 +159,20 @@ function extractFunctionCalls(response) {
   return calls;
 }
 
+function extractFrameItemsFromCalls(functionCalls) {
+  return functionCalls
+    .slice(0, 8)
+    .map((call) => {
+      const item = String(call.args?.item || call.args?.query || '').trim();
+      if (!item) return null;
+      return {
+        item,
+        confidence: toConfidence(call.args?.confidence),
+      };
+    })
+    .filter(Boolean);
+}
+
 function dedupeAndRankProducts(products, seenUrls) {
   const scored = [];
 
@@ -241,19 +203,6 @@ function scoreProduct(product) {
   if (product.vendor) score += 1;
   if (product.url) score += 1;
   return score;
-}
-
-function parseJsonArray(text) {
-  const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
-  if (start === -1 || end === -1 || end <= start) return [];
-  const slice = text.slice(start, end + 1);
-  try {
-    return JSON.parse(slice);
-  } catch (error) {
-    console.warn('[Gemini] Failed to parse JSON array');
-    return [];
-  }
 }
 
 function toConfidence(value) {
