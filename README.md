@@ -25,7 +25,7 @@ npm install
 Create `backend/.env`:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
-# PostgreSQL
+# PostgreSQL (Prisma datasource)
 DATABASE_URL=postgres://<user>:<password>@<host>:5432/<database>
 # Optional, set to false if your local Postgres does not use SSL
 # PGSSL=false
@@ -35,6 +35,15 @@ SHOPIFY_CLIENT_SECRET=your_shopify_client_secret
 # Optional: force mock responses
 # SHOPIFY_USE_MOCK=true
 PORT=3000
+```
+
+Initialize Prisma client + schema:
+```bash
+npm run prisma:generate
+# choose one for local setup
+npm run prisma:migrate
+# or
+npm run prisma:push
 ```
 
 Run the server:
@@ -55,7 +64,7 @@ The extension calls `http://localhost:3000/shop-frame` and expects the backend t
 - `POST /shop-frame` -> `multipart/form-data` with `image` field
 
 ## PostgreSQL
-The backend stores sessions, events, and analytics events in PostgreSQL. Ensure `DATABASE_URL` is set.
+The backend stores sessions, events, and analytics events in PostgreSQL through Prisma. Ensure `DATABASE_URL` is set.
 
 ### Example documents
 Session

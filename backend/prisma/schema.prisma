@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  sessionId    String    @id @map("session_id")
+  videoId      String?   @map("video_id")
+  timestampSec Float?    @map("timestamp_sec")
+  frameHash    String    @map("frame_hash")
+  items        Json
+  results      Json
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([frameHash], map: "idx_sessions_frame_hash")
+  @@index([createdAt(sort: Desc)], map: "idx_sessions_created_at_desc")
+  @@index([videoId, timestampSec], map: "idx_sessions_video_timestamp")
+  @@map("sessions")
+}
+
+model Event {
+  id           BigInt    @id @default(autoincrement())
+  type         String
+  sessionId    String    @map("session_id")
+  itemQuery    String?   @map("item_query")
+  itemCategory String?   @map("item_category")
+  productUrl   String?   @map("product_url")
+  productRank  Int?      @map("product_rank")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  latencyMs    Float?    @map("latency_ms")
+
+  @@index([type, createdAt(sort: Desc)], map: "idx_events_type_created_at")
+  @@index([itemCategory, createdAt(sort: Desc)], map: "idx_events_item_category_created_at")
+  @@map("events")
+}
+
+model AnalyticsEvent {
+  id        BigInt    @id @default(autoincrement())
+  type      String
+  category  String?
+  query     String?
+  productId String?   @map("product_id")
+  productUrl String?  @map("product_url")
+  userId    String?   @map("user_id")
+  requestId String?   @map("request_id")
+  ts        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([ts(sort: Desc)], map: "idx_analytics_events_ts")
+  @@index([category], map: "idx_analytics_events_category")
+  @@index([query], map: "idx_analytics_events_query")
+  @@index([requestId], map: "idx_analytics_events_request_id")
+  @@index([category, query, ts(sort: Desc)], map: "idx_analytics_events_category_query_ts")
+  @@map("analytics_events")
+}

@@ -15,7 +15,7 @@ import {
   recordClick,
   recordImpressions,
 } from './analytics/boost.js';
-import { connectPostgres } from './db/postgres.js';
+import { connectPrisma } from './db/prisma.js';
 import { createSession, findRecentSessionByFrameHash, getInsights } from './db/repositories.js';
 
 dotenv.config();
@@ -286,7 +286,7 @@ if (!USE_POSTGRES) {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 } else {
-  connectPostgres()
+  connectPrisma()
     .then(() => {
       app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
