@@ -324,16 +324,18 @@
     }
 
     let sections = [];
-    let totalCount = 0;
 
     if (resultsOrProducts[0] && resultsOrProducts[0].products) {
       sections = buildProductSectionsFromResults(resultsOrProducts);
-      totalCount = countProductsFromResults(resultsOrProducts);
     } else {
       sections = buildProductSections(detectedItems, resultsOrProducts);
-      totalCount = resultsOrProducts.length;
     }
 
+    if (!sections.length) {
+      return renderEmptyState();
+    }
+
+    const totalCount = sections.reduce((total, section) => total + section.products.length, 0);
     const sectionMarkup = sections.map(section => renderProductSection(section)).join('');
 
     return `
@@ -717,6 +719,7 @@
     const validProducts = filterValidProducts(products);
 
     if (!items || items.length === 0) {
+      if (!validProducts.length) return [];
       return [{
         id: 'section-all',
         title: 'All products',
@@ -743,11 +746,13 @@
         }
       });
 
-      sections.push({
-        id: `section-${index}`,
-        title: label,
-        products: matched
-      });
+      if (matched.length) {
+        sections.push({
+          id: `section-${index}`,
+          title: label,
+          products: matched
+        });
+      }
     });
 
     const unmatched = validProducts.filter((_, index) => !matchedIndexes.has(index));
@@ -777,7 +782,7 @@
         title: label,
         products
       };
-    });
+    }).filter(section => section.products.length > 0);
   }
 
   function countProductsFromResults(results) {
@@ -889,7 +894,7 @@
 
       const totalCount = currentResults.length
         ? countProductsFromResults(currentResults)
-        : currentProducts.length;
+        : sections.reduce((total, section) => total + section.products.length, 0);
 
       console.log('[Shop the Frame] totalCount:', totalCount);
       console.log('[Shop the Frame] sections:', sections);
