@@ -1,14 +1,14 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, type EnhancedGenerateContentResponse } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { normalizeProductSource, searchCatalog } from './shopify.js';
+import { normalizeProductSource, searchCatalog, type CatalogSearchResult, type ProductResult } from './shopify.js';
 
 dotenv.config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const MIME_TYPES = {
+const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
@@ -16,27 +16,28 @@ const MIME_TYPES = {
   '.webp': 'image/webp',
 };
 
-// Function declaration for Gemini function calling
 const SEARCH_TOOL = {
   name: 'searchCatalog',
-  description: 'Search the selected product catalog for purchasable items. Call this function for each distinct product you identify in the image. Make 5-8 calls total for different items.',
+  description:
+    'Search the selected product catalog for purchasable items. Call this function for each distinct product you identify in the image. Make 5-8 calls total for different items.',
   parameters: {
-    type: 'object',
+    type: SchemaType.OBJECT,
     properties: {
       item: {
-        type: 'string',
+        type: SchemaType.STRING,
         description: 'Short label for the item you identified (e.g., "black tee", "leather crossbody bag").',
       },
       query: {
-        type: 'string',
-        description: 'A detailed, search-optimized product query. Include specific attributes like color, material, style, and brand (if visible). Example: "navy blue crew neck cashmere sweater" or "black leather crossbody bag with gold hardware"',
+        type: SchemaType.STRING,
+        description:
+          'A detailed, search-optimized product query. Include specific attributes like color, material, style, and brand (if visible). Example: "navy blue crew neck cashmere sweater" or "black leather crossbody bag with gold hardware"',
       },
       confidence: {
-        type: 'number',
+        type: SchemaType.NUMBER,
         description: 'Confidence in this item identification from 0.0 to 1.0.',
       },
       limit: {
-        type: 'number',
+        type: SchemaType.NUMBER,
         description: 'Maximum number of products to return (1-5). Default is 3.',
       },
     },
@@ -65,11 +66,40 @@ RULES FOR SEARCH QUERIES:
 
 Make exactly 5-8 function calls, one for each distinct item you identify.`;
 
-export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
+interface FunctionCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+interface FrameItem {
+  item: string;
+  confidence: number;
+}
+
+interface ResultGroup {
+  item: { query: string; confidence: number };
+  products: ProductResult[];
+}
+
+export interface AnalyzeImageOptions {
+  productSource?: string;
+  catalogSearch?: (query: string, limit: number, source: string) => Promise<CatalogSearchResult>;
+}
+
+export interface AnalyzeImageResult {
+  frameItems: FrameItem[];
+  results: ResultGroup[];
+}
+
+export async function analyzeImageWithFunctionCalling(
+  imagePath: string,
+  options: AnalyzeImageOptions = {}
+): Promise<AnalyzeImageResult> {
   const productSource = normalizeProductSource(options.productSource);
-  const catalogSearch = typeof options.catalogSearch === 'function'
-    ? options.catalogSearch
-    : (query, limit, source) => searchCatalog(query, limit, source);
+  const catalog =
+    typeof options.catalogSearch === 'function'
+      ? options.catalogSearch
+      : (query: string, limit: number, source: string) => searchCatalog(query, limit, source);
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.0-flash',
@@ -83,15 +113,9 @@ export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
 
   console.log('[Gemini] Starting search query generation with function calling...');
 
-  // Initial request with image
   const result = await model.generateContent([
     AGENT_PROMPT,
-    {
-      inlineData: {
-        mimeType,
-        data: base64Image,
-      },
-    },
+    { inlineData: { mimeType, data: base64Image } },
   ]);
 
   const response = result.response;
@@ -101,32 +125,28 @@ export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
   console.log(`[Gemini] Received ${functionCalls.length} function calls`);
   console.log(`[Gemini] Extracted ${frameItems.length} frame items`);
 
-  // Execute all function calls in parallel
   const searchResults = await Promise.all(
     functionCalls.slice(0, 8).map(async (call) => {
-      const { query, limit = 3 } = call.args;
+      const query = String(call.args.query || '');
+      const limit = typeof call.args.limit === 'number' ? call.args.limit : 3;
       try {
-        return await catalogSearch(query, limit, productSource);
+        return await catalog(query, limit, productSource);
       } catch (error) {
-        console.error(`[Gemini] Search failed for "${query}":`, error.message);
+        console.error(`[Gemini] Search failed for "${query}":`, (error as Error).message);
         return { query, products: [] };
       }
     })
   );
 
   const results = buildRankedResults(functionCalls, searchResults);
-
   console.log(`[Gemini] Returning ${results.length} item result groups`);
 
-  return {
-    frameItems,
-    results,
-  };
+  return { frameItems, results };
 }
 
-function buildRankedResults(functionCalls, searchResults) {
-  const seenUrls = new Set();
-  const results = [];
+function buildRankedResults(functionCalls: FunctionCall[], searchResults: CatalogSearchResult[]): ResultGroup[] {
+  const seenUrls = new Set<string>();
+  const results: ResultGroup[] = [];
 
   for (let i = 0; i < searchResults.length; i++) {
     const call = functionCalls[i];
@@ -135,7 +155,7 @@ function buildRankedResults(functionCalls, searchResults) {
 
     results.push({
       item: {
-        query: call.args?.query || result.query,
+        query: String(call.args?.query || result.query),
         confidence: toConfidence(call.args?.confidence),
       },
       products,
@@ -145,16 +165,14 @@ function buildRankedResults(functionCalls, searchResults) {
   return results;
 }
 
-function extractFunctionCalls(response) {
-  const calls = [];
+function extractFunctionCalls(response: EnhancedGenerateContentResponse): FunctionCall[] {
+  const calls: FunctionCall[] = [];
+  const r = response as { candidates?: Array<{ content?: { parts?: Array<{ functionCall?: { name: string; args?: Record<string, unknown> } }> } }> };
 
-  for (const candidate of response.candidates || []) {
+  for (const candidate of r.candidates || []) {
     for (const part of candidate.content?.parts || []) {
       if (part.functionCall) {
-        calls.push({
-          name: part.functionCall.name,
-          args: part.functionCall.args || {},
-        });
+        calls.push({ name: part.functionCall.name, args: part.functionCall.args || {} });
       }
     }
   }
@@ -162,44 +180,34 @@ function extractFunctionCalls(response) {
   return calls;
 }
 
-function extractFrameItemsFromCalls(functionCalls) {
+function extractFrameItemsFromCalls(functionCalls: FunctionCall[]): FrameItem[] {
   return functionCalls
     .slice(0, 8)
     .map((call) => {
       const item = String(call.args?.item || call.args?.query || '').trim();
       if (!item) return null;
-      return {
-        item,
-        confidence: toConfidence(call.args?.confidence),
-      };
+      return { item, confidence: toConfidence(call.args?.confidence) };
     })
-    .filter(Boolean);
+    .filter((x): x is FrameItem => x !== null);
 }
 
-function dedupeAndRankProducts(products, seenUrls) {
-  const scored = [];
+function dedupeAndRankProducts(products: ProductResult[], seenUrls: Set<string>): ProductResult[] {
+  const scored: Array<{ product: ProductResult; score: number }> = [];
 
   for (const product of products) {
     if (!product) continue;
-    // Use url or generate a unique key from title+vendor for deduplication
     const dedupeKey = product.url || `${product.title}-${product.vendor}`;
     if (seenUrls.has(dedupeKey)) continue;
     seenUrls.add(dedupeKey);
-
-    scored.push({
-      product,
-      score: scoreProduct(product),
-    });
+    scored.push({ product, score: scoreProduct(product) });
   }
 
   console.log(`[Gemini] Dedupe: ${products.length} input -> ${scored.length} output`);
 
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .map(entry => entry.product);
+  return scored.sort((a, b) => b.score - a.score).map((entry) => entry.product);
 }
 
-function scoreProduct(product) {
+function scoreProduct(product: ProductResult): number {
   let score = 0;
   if (product.image) score += 2;
   if (product.price) score += 2;
@@ -208,13 +216,12 @@ function scoreProduct(product) {
   return score;
 }
 
-function toConfidence(value) {
-  const num = typeof value === 'number' ? value : parseFloat(value);
+function toConfidence(value: unknown): number {
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
   if (Number.isNaN(num)) return 0.5;
   return Math.max(0, Math.min(1, num));
 }
 
-// Keep the old function for backwards compatibility
-export async function analyzeImage(imagePath, options = {}) {
+export async function analyzeImage(imagePath: string, options: AnalyzeImageOptions = {}): Promise<AnalyzeImageResult> {
   return analyzeImageWithFunctionCalling(imagePath, options);
 }

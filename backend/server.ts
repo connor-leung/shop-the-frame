@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import dotenv from 'dotenv';
@@ -8,10 +8,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { analyzeImage } from './services/gemini.js';
 import { normalizeProductSource, searchCatalog } from './services/shopify.js';
-import {
-  recordClick,
-  recordImpressions,
-} from './analytics/boost.js';
+import { recordClick, recordImpressions } from './analytics/boost.js';
 import { connectPrisma } from './db/prisma.js';
 
 dotenv.config();
@@ -23,20 +20,17 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-// CORS configuration - allow all origins for development
-// This is needed because:
-// 1. Content scripts run in the context of the web page (youtube.com)
-// 2. Background scripts run in chrome-extension:// context
-// 3. Errors can bypass the cors middleware, so we need permissive settings
-app.use(cors({
-  origin: true, // Allow all origins
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
 
-// Ensure CORS headers are set even on errors
-app.use((req, res, next) => {
+app.use(
+  cors({
+    origin: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
+
+app.use((req: Request, res: Response, next: NextFunction) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -45,44 +39,38 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Multer configuration for file uploads
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+fs.mkdirSync(uploadsDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, 'uploads'));
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + '-' + file.originalname);
-  }
+  },
 });
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept images only
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error('Only image files are allowed'));
     }
-  }
+  },
 });
 
-// POST /health
-app.post('/health', (req, res) => {
+app.post('/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// POST /shop-frame - accepts multipart/form-data with "frame" field
-app.post('/shop-frame', upload.single('frame'), async (req, res) => {
+app.post('/shop-frame', upload.single('frame'), async (req: Request, res: Response) => {
   if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      error: 'No image file provided'
-    });
+    return res.status(400).json({ success: false, error: 'No image file provided' });
   }
 
   const requestId = crypto.randomUUID();
@@ -98,30 +86,20 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
       console.error('[Analytics] Failed to record impressions:', error);
     });
 
-    // Clean up uploaded file after processing
     fs.unlink(req.file.path, (err) => {
       if (err) console.error('Failed to delete temp file:', err);
     });
 
-    res.json({
-      ...result,
-      requestId,
-    });
+    res.json({ ...result, requestId });
   } catch (error) {
-    // Clean up on error
-    fs.unlink(req.file.path, () => {});
-
+    fs.unlink(req.file!.path, () => {});
     console.error('Gemini analysis error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to analyze image'
-    });
+    res.status(500).json({ success: false, error: 'Failed to analyze image' });
   }
 });
 
-// POST /track - accepts JSON for server-side tracking (e.g., product clicks)
-app.post('/track', (req, res) => {
-  const { eventName, userId, eventProps } = req.body || {};
+app.post('/track', (req: Request, res: Response) => {
+  const { eventName, eventProps } = req.body || {};
 
   if (!eventName) {
     return res.status(400).json({ ok: false, error: 'eventName is required' });
@@ -139,14 +117,11 @@ app.post('/track', (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /insights/products
-app.get('/insights/products', (req, res) => {
+app.get('/insights/products', (_req: Request, res: Response) => {
   res.json({ products: [] });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  // Ensure CORS headers are set on error responses
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -154,16 +129,10 @@ app.use((err, req, res, next) => {
   console.error('Server error:', err);
 
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({
-      success: false,
-      error: err.message
-    });
+    return res.status(400).json({ success: false, error: err.message });
   }
 
-  res.status(500).json({
-    success: false,
-    error: err.message || 'Internal server error'
-  });
+  res.status(500).json({ success: false, error: err.message || 'Internal server error' });
 });
 
 if (!USE_POSTGRES) {

@@ -1,12 +1,23 @@
 import { getPrisma } from '../db/prisma.js';
 
-export async function recordImpressions({ results }) {
+interface Product {
+  id?: string | null;
+  product_url?: string | null;
+  url?: string | null;
+  marketplace?: string | null;
+}
+
+interface ResultGroup {
+  products?: Product[];
+}
+
+export async function recordImpressions({ results }: { results: ResultGroup[] }): Promise<void> {
   if (!results?.length) return;
 
   const prisma = getPrisma();
   const products = results.flatMap((r) => r.products ?? []);
 
-  const validProducts = products.filter((p) => p.id);
+  const validProducts = products.filter((p): p is Product & { id: string } => Boolean(p.id));
   console.log(`[Analytics] Recording ${validProducts.length} impression(s):`, validProducts.map((p) => p.id));
 
   await Promise.all(
@@ -22,7 +33,7 @@ export async function recordImpressions({ results }) {
   console.log(`[Analytics] Impressions saved for ${validProducts.length} product(s)`);
 }
 
-export async function recordClick({ productId, productUrl }) {
+export async function recordClick({ productId, productUrl }: { productId: string; productUrl?: string | null }): Promise<void> {
   if (!productId) return;
 
   console.log(`[Analytics] Recording click for product: ${productId}`);

@@ -3,11 +3,11 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY . .
 
-RUN npx prisma generate && mkdir -p /app/uploads
+RUN npx prisma generate && npm run build && mkdir -p /app/uploads
 
 EXPOSE 3000
 
