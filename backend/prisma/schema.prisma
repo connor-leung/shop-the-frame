@@ -7,25 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AnalyticsEvent {
-  id        BigInt    @id @default(autoincrement())
-  type      String
-  category  String?
-  query     String?
-  productId String?   @map("product_id")
-  productUrl String?  @map("product_url")
-  userId    String?   @map("user_id")
-  requestId String?   @map("request_id")
-  ts        DateTime  @default(now()) @db.Timestamptz(6)
-
-  @@index([ts(sort: Desc)], map: "idx_analytics_events_ts")
-  @@index([category], map: "idx_analytics_events_category")
-  @@index([query], map: "idx_analytics_events_query")
-  @@index([requestId], map: "idx_analytics_events_request_id")
-  @@index([category, query, ts(sort: Desc)], map: "idx_analytics_events_category_query_ts")
-  @@map("analytics_events")
-}
-
 model CatalogQueryCache {
   id            BigInt    @id @default(autoincrement())
   userId        String    @map("user_id")
@@ -41,31 +22,14 @@ model CatalogQueryCache {
   @@map("catalog_query_cache")
 }
 
-model ProductView {
-  id          BigInt    @id @default(autoincrement())
-  userId      String    @map("user_id")
-  productId   String    @map("product_id")
-  productUrl  String?   @map("product_url")
-  firstSeenAt DateTime  @default(now()) @map("first_seen_at") @db.Timestamptz(6)
-  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-  viewCount   Int       @default(1) @map("view_count")
+model ProductAnalytics {
+  id          BigInt   @id @default(autoincrement())
+  productId   String   @unique @map("product_id")
+  productUrl  String?  @map("product_url")
+  platform    String?
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
 
-  @@unique([userId, productId], map: "uq_product_views_user_product")
-  @@index([userId, lastSeenAt(sort: Desc)], map: "idx_product_views_user_last_seen")
-  @@map("product_views")
-}
-
-model ProductClick {
-  id         BigInt    @id @default(autoincrement())
-  userId     String    @map("user_id")
-  requestId  String?   @map("request_id")
-  category   String?
-  query      String?
-  productId  String    @map("product_id")
-  productUrl String?   @map("product_url")
-  clickedAt  DateTime  @default(now()) @map("clicked_at") @db.Timestamptz(6)
-
-  @@index([userId, clickedAt(sort: Desc)], map: "idx_product_clicks_user_clicked_at")
-  @@index([productId], map: "idx_product_clicks_product_id")
-  @@map("product_clicks")
+  @@index([impressions(sort: Desc)], map: "idx_product_analytics_impressions")
+  @@map("product_analytics")
 }

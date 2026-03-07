@@ -9,28 +9,20 @@ import { fileURLToPath } from 'url';
 import { analyzeImage } from './services/gemini.js';
 import { normalizeProductSource, searchCatalog } from './services/shopify.js';
 import {
-  applyBoostsToResults,
-  getBoostScores,
-  logBoosts,
   recordClick,
   recordImpressions,
 } from './analytics/boost.js';
 import { connectPrisma } from './db/prisma.js';
-import {
-  findCachedCatalogQuery,
-  getInsights,
-  upsertCatalogQueryCache,
-} from './db/repositories.js';
 
 dotenv.config();
+
+const USE_POSTGRES = process.env.USE_POSTGRES !== 'false';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const USE_POSTGRES = process.env.USE_POSTGRES !== 'false';
-
 // CORS configuration - allow all origins for development
 // This is needed because:
 // 1. Content scripts run in the context of the web page (youtube.com)
@@ -52,38 +44,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
-
-function resolveUserId(headers) {
-  const value = headers['x-anonymous-id'] || headers['x-user-id'] || 'anonymous';
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function buildCatalogSearchWithCache(userId) {
-  return async (query, limit, productSource) => {
-    const source = normalizeProductSource(productSource);
-    const cached = await findCachedCatalogQuery({
-      userId,
-      query,
-      productSource: source,
-    });
-
-    if (cached) {
-      return {
-        query,
-        products: cached.products || [],
-      };
-    }
-
-    const fresh = await searchCatalog(query, limit, source);
-    await upsertCatalogQueryCache({
-      userId,
-      query,
-      productSource: source,
-      products: fresh.products || [],
-    });
-    return fresh;
-  };
-}
 
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
@@ -125,31 +85,18 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
     });
   }
 
-  const userId = resolveUserId(req.headers);
   const requestId = crypto.randomUUID();
 
   try {
-    const boosts = await getBoostScores().catch((error) => {
-      console.error('[Boosts] Failed to load boosts:', error);
-      return { categoryBoosts: {}, queryBoosts: {}, boostsByKey: {} };
-    });
-    logBoosts(boosts);
-
     const result = await analyzeImage(req.file.path, {
       productSource: req.body?.productSource,
-      catalogSearch: buildCatalogSearchWithCache(userId),
+      catalogSearch: (query, limit, productSource) =>
+        searchCatalog(query, limit, normalizeProductSource(productSource)),
     });
 
-    const boostedResult = applyBoostsToResults(result, boosts);
-
-    recordImpressions({
-      userId,
-      requestId,
-      frameItems: boostedResult.frameItems,
-      results: boostedResult.results,
-      }).catch((error) => {
-        console.error('[Boosts] Failed to record impressions:', error);
-      });
+    recordImpressions({ results: result.results }).catch((error) => {
+      console.error('[Analytics] Failed to record impressions:', error);
+    });
 
     // Clean up uploaded file after processing
     fs.unlink(req.file.path, (err) => {
@@ -157,7 +104,7 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
     });
 
     res.json({
-      ...boostedResult,
+      ...result,
       requestId,
     });
   } catch (error) {
@@ -182,35 +129,19 @@ app.post('/track', (req, res) => {
 
   if (eventName === 'product_clicked') {
     recordClick({
-      userId,
-      requestId: eventProps?.requestId,
-      category: eventProps?.category,
-      query: eventProps?.query,
       productId: eventProps?.productId,
       productUrl: eventProps?.productUrl,
     }).catch((error) => {
-      console.error('[Boosts] Failed to record click:', error);
+      console.error('[Analytics] Failed to record click:', error);
     });
   }
 
   res.json({ ok: true });
 });
 
-// GET /insights - lightweight analytics for merchants (last 7 days)
-app.get('/insights', async (req, res) => {
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const limit = 10;
-
-  try {
-    const insights = await getInsights(since, limit);
-    res.json({
-      windowDays: 7,
-      ...insights,
-    });
-  } catch (error) {
-    console.error('Insights error:', error);
-    res.status(500).json({ ok: false, error: 'Failed to load insights' });
-  }
+// GET /insights/products
+app.get('/insights/products', (req, res) => {
+  res.json({ products: [] });
 });
 
 // Error handling middleware

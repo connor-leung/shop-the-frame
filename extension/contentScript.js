@@ -286,7 +286,7 @@
     const sourceLabel = getMarketplaceLabel(product);
 
     return `
-      <div class="product-card" data-url="${escapeHtml(productUrl)}">
+      <div class="product-card" data-url="${escapeHtml(productUrl)}" data-id="${escapeHtml(product.id || '')}">
         <div class="product-card-inner">
           <div class="product-image">
             <img src="${escapeHtml(imageUrl)}"
@@ -461,6 +461,7 @@
         const card = btn.closest('.product-card');
         const url = card.dataset.url;
         if (url && url !== '#') {
+          trackProductClick(card.dataset.id, url);
           window.open(url, '_blank');
         }
       });
@@ -471,6 +472,7 @@
       card.addEventListener('click', () => {
         const url = card.dataset.url;
         if (url && url !== '#') {
+          trackProductClick(card.dataset.id, url);
           window.open(url, '_blank');
         }
       });
@@ -924,6 +926,18 @@
         updateDynamicContent();
       }
     }
+  }
+
+  function trackProductClick(productId, productUrl) {
+    if (!productId) return;
+    fetch('http://localhost:3000/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventName: 'product_clicked',
+        eventProps: { productId, productUrl },
+      }),
+    }).catch(() => {});
   }
 
   function sendToBackground(frameBlob) {

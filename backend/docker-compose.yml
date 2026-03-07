@@ -3,6 +3,8 @@ services:
     image: postgres:16-alpine
     container_name: shop-the-frame
     restart: unless-stopped
+    logging:
+      driver: none
     environment:
       POSTGRES_DB: shop-the-frame
       POSTGRES_USER: postgres
@@ -37,6 +39,8 @@ services:
     image: dpage/pgadmin4:8
     container_name: shop-the-frame-pgadmin
     restart: unless-stopped
+    logging:
+      driver: none
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@local.dev
       PGADMIN_DEFAULT_PASSWORD: admin

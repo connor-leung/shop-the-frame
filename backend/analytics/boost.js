@@ -1,152 +1,38 @@
-import {
-  insertAnalyticsClick,
-  insertAnalyticsImpressions,
-  listCategoryBoostRows,
-  listQueryBoostRows,
-  upsertProductViews,
-} from '../db/repositories.js';
+import { getPrisma } from '../db/prisma.js';
 
-const LOOKBACK_DAYS = 30;
-const MIN_IMPRESSIONS = 5;
-const USE_POSTGRES = process.env.USE_POSTGRES !== 'false';
+export async function recordImpressions({ results }) {
+  if (!results?.length) return;
 
-function computeBoost(clicks, impressions) {
-  if (!impressions || impressions < MIN_IMPRESSIONS) return 1;
-  const ctr = clicks / impressions;
-  return 1 + ctr;
+  const prisma = getPrisma();
+  const products = results.flatMap((r) => r.products ?? []);
+
+  const validProducts = products.filter((p) => p.id);
+  console.log(`[Analytics] Recording ${validProducts.length} impression(s):`, validProducts.map((p) => p.id));
+
+  await Promise.all(
+    validProducts.map((p) =>
+      prisma.productAnalytics.upsert({
+        where: { productId: String(p.id) },
+        create: { productId: String(p.id), productUrl: p.product_url ?? p.url ?? null, platform: p.marketplace ?? null, impressions: 1 },
+        update: { impressions: { increment: 1 } },
+      })
+    )
+  );
+
+  console.log(`[Analytics] Impressions saved for ${validProducts.length} product(s)`);
 }
 
-function buildBoostMap(rows) {
-  const boosts = {};
-  for (const row of rows) {
-    boosts[row.key] = computeBoost(Number(row.clicks), Number(row.impressions));
-  }
-  return boosts;
-}
+export async function recordClick({ productId, productUrl }) {
+  if (!productId) return;
 
-export async function getBoostScores() {
-  if (!USE_POSTGRES) {
-    return { categoryBoosts: {}, queryBoosts: {}, boostsByKey: {} };
-  }
-  const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  console.log(`[Analytics] Recording click for product: ${productId}`);
 
-  const categoryRows = await listCategoryBoostRows(since);
-  const queryRows = await listQueryBoostRows(since);
-
-  const categoryBoosts = buildBoostMap(categoryRows);
-  const queryBoosts = buildBoostMap(queryRows);
-  const boostsByKey = {};
-
-  for (const [key, value] of Object.entries(categoryBoosts)) {
-    boostsByKey[`category:${key}`] = value;
-  }
-  for (const [key, value] of Object.entries(queryBoosts)) {
-    boostsByKey[`query:${key}`] = value;
-  }
-
-  return { categoryBoosts, queryBoosts, boostsByKey };
-}
-
-export function applyBoostsToResults(result, boosts) {
-  if (!result || !Array.isArray(result.results)) return result;
-
-  const { categoryBoosts, queryBoosts } = boosts;
-  const groups = result.results.map((group, index) => {
-    const category = result.frameItems?.[index]?.item || 'unknown';
-    const query = group.item?.query || '';
-    const categoryBoost = categoryBoosts[category] || 1;
-    const queryBoost = queryBoosts[query] || 1;
-    const products = Array.isArray(group.products) ? group.products : [];
-
-    const scoredProducts = products.map((product, productIndex) => {
-      const baseScore = (products.length - productIndex) / Math.max(products.length, 1);
-      return { product, score: baseScore * queryBoost };
-    });
-
-    const boostedProducts = scoredProducts
-      .sort((a, b) => b.score - a.score)
-      .map(entry => entry.product);
-
-    return {
-      index,
-      category,
-      categoryBoost,
-      query,
-      queryBoost,
-      group: {
-        ...group,
-        products: boostedProducts,
-      },
-    };
+  const prisma = getPrisma();
+  await prisma.productAnalytics.upsert({
+    where: { productId: String(productId) },
+    create: { productId: String(productId), productUrl: productUrl ?? null, clicks: 1 },
+    update: { clicks: { increment: 1 } },
   });
 
-  groups.sort((a, b) => b.categoryBoost - a.categoryBoost);
-
-  return {
-    ...result,
-    frameItems: groups.map(entry => result.frameItems?.[entry.index]).filter(Boolean),
-    results: groups.map(entry => entry.group),
-  };
-}
-
-export function logBoosts(boosts) {
-  const categoryPairs = Object.entries(boosts.categoryBoosts || {}).sort((a, b) => b[1] - a[1]);
-  const queryPairs = Object.entries(boosts.queryBoosts || {}).sort((a, b) => b[1] - a[1]);
-
-  if (!categoryPairs.length && !queryPairs.length) {
-    console.log('[Boosts] No boost data available yet.');
-    return;
-  }
-
-  console.log('[Boosts] Category boosts:', categoryPairs.slice(0, 5));
-  console.log('[Boosts] Query boosts:', queryPairs.slice(0, 5));
-}
-
-export async function recordImpressions({ userId, requestId, frameItems, results }) {
-  if (!USE_POSTGRES) return;
-  const docs = [];
-  const now = new Date();
-
-  results.forEach((group, index) => {
-    const category = frameItems?.[index]?.item || 'unknown';
-    const query = group.item?.query || '';
-    const products = Array.isArray(group.products) ? group.products : [];
-
-    products.forEach(product => {
-      docs.push({
-        type: 'impression',
-        category,
-        query,
-        productId: product.id || product.url || 'unknown',
-        productUrl: product.url || '',
-        userId: userId || 'anonymous',
-        requestId,
-        ts: now,
-      });
-    });
-  });
-
-  if (docs.length) {
-    await Promise.all([
-      insertAnalyticsImpressions(docs),
-      upsertProductViews({
-        userId: userId || 'anonymous',
-        results,
-      }),
-    ]);
-  }
-}
-
-export async function recordClick({ userId, requestId, category, query, productId, productUrl }) {
-  if (!USE_POSTGRES) return;
-  await insertAnalyticsClick({
-    type: 'click',
-    category,
-    query,
-    productId: productId || productUrl || 'unknown',
-    productUrl: productUrl || '',
-    userId: userId || 'anonymous',
-    requestId,
-    ts: new Date(),
-  });
+  console.log(`[Analytics] Click saved for product: ${productId}`);
 }

@@ -140,6 +140,10 @@ export async function searchProducts(query, limit = 5) {
       return [];
     }
 
+    if (products[0]) {
+      console.log('[Shopify] Raw MCP product sample:', JSON.stringify(products[0], null, 2));
+    }
+
     // Normalize product objects
     const normalized = products.map(normalizeProduct);
 
