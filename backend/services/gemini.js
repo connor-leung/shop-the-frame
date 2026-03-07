@@ -67,6 +67,9 @@ Make exactly 5-8 function calls, one for each distinct item you identify.`;
 
 export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
   const productSource = normalizeProductSource(options.productSource);
+  const catalogSearch = typeof options.catalogSearch === 'function'
+    ? options.catalogSearch
+    : (query, limit, source) => searchCatalog(query, limit, source);
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.0-flash',
@@ -82,7 +85,7 @@ export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
 
   // Initial request with image
   const result = await model.generateContent([
-    `${AGENT_PROMPT}\n\nIdentified items:\n${JSON.stringify(frameItems, null, 2)}`,
+    AGENT_PROMPT,
     {
       inlineData: {
         mimeType,
@@ -103,7 +106,7 @@ export async function analyzeImageWithFunctionCalling(imagePath, options = {}) {
     functionCalls.slice(0, 8).map(async (call) => {
       const { query, limit = 3 } = call.args;
       try {
-        return await searchCatalog(query, limit, productSource);
+        return await catalogSearch(query, limit, productSource);
       } catch (error) {
         console.error(`[Gemini] Search failed for "${query}":`, error.message);
         return { query, products: [] };

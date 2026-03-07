@@ -3,6 +3,7 @@ import {
   insertAnalyticsImpressions,
   listCategoryBoostRows,
   listQueryBoostRows,
+  upsertProductViews,
 } from '../db/repositories.js';
 
 const LOOKBACK_DAYS = 30;
@@ -126,7 +127,13 @@ export async function recordImpressions({ userId, requestId, frameItems, results
   });
 
   if (docs.length) {
-    await insertAnalyticsImpressions(docs);
+    await Promise.all([
+      insertAnalyticsImpressions(docs),
+      upsertProductViews({
+        userId: userId || 'anonymous',
+        results,
+      }),
+    ]);
   }
 }
 

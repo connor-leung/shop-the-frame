@@ -1,47 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { getPrisma } from './prisma.js';
 
-function mapSessionRow(row) {
-  return {
-    sessionId: row.sessionId,
-    videoId: row.videoId,
-    timestampSec: row.timestampSec,
-    frameHash: row.frameHash,
-    items: row.items || [],
-    results: row.results || [],
-    createdAt: row.createdAt,
-  };
-}
-
-export async function findRecentSessionByFrameHash(frameHash, cutoff) {
-  const prisma = getPrisma();
-  const row = await prisma.session.findFirst({
-    where: {
-      frameHash,
-      createdAt: {
-        gte: cutoff,
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
-  return row ? mapSessionRow(row) : null;
-}
-
-export async function createSession(session) {
-  const prisma = getPrisma();
-  await prisma.session.create({
-    data: {
-      sessionId: session.sessionId,
-      videoId: session.videoId ?? null,
-      timestampSec: session.timestampSec ?? null,
-      frameHash: session.frameHash,
-      items: session.items || [],
-      results: session.results || [],
-    },
-  });
-}
+const CATALOG_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export async function listCategoryBoostRows(since) {
   const prisma = getPrisma();
@@ -91,18 +51,158 @@ export async function insertAnalyticsImpressions(docs) {
 
 export async function insertAnalyticsClick(doc) {
   const prisma = getPrisma();
-  await prisma.analyticsEvent.create({
-    data: {
-      type: doc.type,
-      category: doc.category ?? null,
-      query: doc.query ?? null,
-      productId: doc.productId ?? null,
-      productUrl: doc.productUrl ?? null,
-      userId: doc.userId ?? null,
-      requestId: doc.requestId ?? null,
-      ts: doc.ts,
+  await prisma.$transaction([
+    prisma.analyticsEvent.create({
+      data: {
+        type: doc.type,
+        category: doc.category ?? null,
+        query: doc.query ?? null,
+        productId: doc.productId ?? null,
+        productUrl: doc.productUrl ?? null,
+        userId: doc.userId ?? null,
+        requestId: doc.requestId ?? null,
+        ts: doc.ts,
+      },
+    }),
+    prisma.productClick.create({
+      data: {
+        userId: doc.userId || 'anonymous',
+        requestId: doc.requestId ?? null,
+        category: doc.category ?? null,
+        query: doc.query ?? null,
+        productId: doc.productId || doc.productUrl || 'unknown',
+        productUrl: doc.productUrl ?? null,
+        clickedAt: doc.ts ?? new Date(),
+      },
+    }),
+  ]);
+}
+
+function normalizeQuery(query) {
+  return String(query || '').trim().toLowerCase();
+}
+
+function normalizeSource(source) {
+  const value = String(source || 'shopify').trim().toLowerCase();
+  if (value === 'amazon' || value === 'all') return value;
+  return 'shopify';
+}
+
+function mapCachedProducts(products) {
+  return Array.isArray(products) ? products : [];
+}
+
+export async function findCachedCatalogQuery({ userId, query, productSource }) {
+  if (!userId || !query) return null;
+  const prisma = getPrisma();
+  const normalizedQuery = normalizeQuery(query);
+  if (!normalizedQuery) return null;
+
+  const row = await prisma.catalogQueryCache.findUnique({
+    where: {
+      userId_query_productSource: {
+        userId,
+        query: normalizedQuery,
+        productSource: normalizeSource(productSource),
+      },
     },
   });
+
+  if (!row) return null;
+  if (Date.now() - row.updatedAt.getTime() > CATALOG_CACHE_TTL_MS) return null;
+
+  await prisma.catalogQueryCache.update({
+    where: { id: row.id },
+    data: { lastUsedAt: new Date() },
+  });
+
+  return {
+    query,
+    products: mapCachedProducts(row.products),
+  };
+}
+
+export async function upsertCatalogQueryCache({ userId, query, productSource, products }) {
+  if (!userId || !query) return;
+  const prisma = getPrisma();
+  const normalizedQuery = normalizeQuery(query);
+  if (!normalizedQuery) return;
+  const now = new Date();
+
+  await prisma.catalogQueryCache.upsert({
+    where: {
+      userId_query_productSource: {
+        userId,
+        query: normalizedQuery,
+        productSource: normalizeSource(productSource),
+      },
+    },
+    update: {
+      products: Array.isArray(products) ? products : [],
+      updatedAt: now,
+      lastUsedAt: now,
+    },
+    data: {
+      userId,
+      query: normalizedQuery,
+      productSource: normalizeSource(productSource),
+      products: Array.isArray(products) ? products : [],
+      createdAt: now,
+      lastUsedAt: now,
+    },
+  });
+}
+
+export async function upsertProductViews({ userId, results }) {
+  if (!userId || !Array.isArray(results) || !results.length) return;
+  const prisma = getPrisma();
+  const now = new Date();
+  const uniqueProducts = new Map();
+
+  for (const group of results) {
+    const products = Array.isArray(group?.products) ? group.products : [];
+    for (const product of products) {
+      const productId = String(product?.id || product?.url || '').trim();
+      if (!productId) continue;
+      if (!uniqueProducts.has(productId)) {
+        uniqueProducts.set(productId, {
+          productId,
+          productUrl: product?.url ? String(product.url) : null,
+        });
+      }
+    }
+  }
+
+  if (!uniqueProducts.size) return;
+
+  const statements = [];
+  for (const entry of uniqueProducts.values()) {
+    statements.push(
+      prisma.productView.upsert({
+        where: {
+          userId_productId: {
+            userId,
+            productId: entry.productId,
+          },
+        },
+        update: {
+          viewCount: { increment: 1 },
+          lastSeenAt: now,
+          productUrl: entry.productUrl,
+        },
+        create: {
+          userId,
+          productId: entry.productId,
+          productUrl: entry.productUrl,
+          firstSeenAt: now,
+          lastSeenAt: now,
+          viewCount: 1,
+        },
+      })
+    );
+  }
+
+  await prisma.$transaction(statements);
 }
 
 export async function getInsights(since, limit) {
@@ -114,73 +214,60 @@ export async function getInsights(since, limit) {
     topClickedResult,
     topQueriesResult,
     ctrResult,
-    latencyResult,
   ] = await Promise.all([
     prisma.$queryRaw`
-      SELECT item_category AS category, COUNT(*)::int AS count
-      FROM events
-      WHERE type = 'item_impression'
-        AND created_at >= ${since}
-        AND item_category IS NOT NULL
-      GROUP BY item_category
+      SELECT category, COUNT(*)::int AS count
+      FROM analytics_events
+      WHERE type = 'impression'
+        AND ts >= ${since}
+        AND category IS NOT NULL
+      GROUP BY category
       ORDER BY count DESC
       LIMIT ${Prisma.raw(String(normalizedLimit))}
     `,
     prisma.$queryRaw`
-      SELECT item_category AS category, COUNT(*)::int AS count
-      FROM events
-      WHERE type = 'product_click'
-        AND created_at >= ${since}
-        AND item_category IS NOT NULL
-      GROUP BY item_category
+      SELECT category, COUNT(*)::int AS count
+      FROM analytics_events
+      WHERE type = 'click'
+        AND ts >= ${since}
+        AND category IS NOT NULL
+      GROUP BY category
       ORDER BY count DESC
       LIMIT ${Prisma.raw(String(normalizedLimit))}
     `,
     prisma.$queryRaw`
       SELECT
-        result_item.query AS query,
+        query,
         COUNT(*)::int AS count
-      FROM sessions s
-      CROSS JOIN LATERAL jsonb_array_elements(s.results) AS result_group
-      CROSS JOIN LATERAL (
-        SELECT NULLIF(TRIM(result_group->'item'->>'query'), '') AS query
-      ) AS result_item
-      WHERE s.created_at >= ${since}
-        AND result_item.query IS NOT NULL
-      GROUP BY result_item.query
+      FROM analytics_events
+      WHERE ts >= ${since}
+        AND query IS NOT NULL
+        AND type = 'impression'
+      GROUP BY query
       ORDER BY count DESC
       LIMIT ${Prisma.raw(String(normalizedLimit))}
     `,
     prisma.$queryRaw`
       SELECT
-        item_category AS category,
-        COUNT(*) FILTER (WHERE type = 'item_impression')::int AS impressions,
-        COUNT(*) FILTER (WHERE type = 'product_click')::int AS clicks,
+        category,
+        COUNT(*) FILTER (WHERE type = 'impression')::int AS impressions,
+        COUNT(*) FILTER (WHERE type = 'click')::int AS clicks,
         CASE
-          WHEN COUNT(*) FILTER (WHERE type = 'item_impression') > 0
-          THEN (COUNT(*) FILTER (WHERE type = 'product_click')::double precision
-            / COUNT(*) FILTER (WHERE type = 'item_impression')::double precision)
+          WHEN COUNT(*) FILTER (WHERE type = 'impression') > 0
+          THEN (COUNT(*) FILTER (WHERE type = 'click')::double precision
+            / COUNT(*) FILTER (WHERE type = 'impression')::double precision)
           ELSE 0
         END AS ctr
-      FROM events
-      WHERE created_at >= ${since}
-        AND item_category IS NOT NULL
-      GROUP BY item_category
+      FROM analytics_events
+      WHERE ts >= ${since}
+        AND category IS NOT NULL
+      GROUP BY category
       ORDER BY ctr DESC
       LIMIT ${Prisma.raw(String(normalizedLimit))}
     `,
-    prisma.$queryRaw`
-      SELECT
-        percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS p50,
-        percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95
-      FROM events
-      WHERE type = 'shop_frame_latency'
-        AND created_at >= ${since}
-        AND latency_ms IS NOT NULL
-    `,
   ]);
 
-  const latency = latencyResult[0] || { p50: null, p95: null };
+  const latency = { p50: null, p95: null };
 
   return {
     topDetectedCategories: topDetectedResult.map((entry) => ({

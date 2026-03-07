@@ -7,7 +7,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { analyzeImage } from './services/gemini.js';
-import { track } from './analytics/amplitude.js';
+import { normalizeProductSource, searchCatalog } from './services/shopify.js';
 import {
   applyBoostsToResults,
   getBoostScores,
@@ -16,7 +16,11 @@ import {
   recordImpressions,
 } from './analytics/boost.js';
 import { connectPrisma } from './db/prisma.js';
-import { createSession, findRecentSessionByFrameHash, getInsights } from './db/repositories.js';
+import {
+  findCachedCatalogQuery,
+  getInsights,
+  upsertCatalogQueryCache,
+} from './db/repositories.js';
 
 dotenv.config();
 
@@ -48,6 +52,38 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+function resolveUserId(headers) {
+  const value = headers['x-anonymous-id'] || headers['x-user-id'] || 'anonymous';
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildCatalogSearchWithCache(userId) {
+  return async (query, limit, productSource) => {
+    const source = normalizeProductSource(productSource);
+    const cached = await findCachedCatalogQuery({
+      userId,
+      query,
+      productSource: source,
+    });
+
+    if (cached) {
+      return {
+        query,
+        products: cached.products || [],
+      };
+    }
+
+    const fresh = await searchCatalog(query, limit, source);
+    await upsertCatalogQueryCache({
+      userId,
+      query,
+      productSource: source,
+      products: fresh.products || [],
+    });
+    return fresh;
+  };
+}
 
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
@@ -89,14 +125,8 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
     });
   }
 
-  const userId = req.headers['x-anonymous-id'] || req.headers['x-user-id'] || 'anonymous';
-  const cacheCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const userId = resolveUserId(req.headers);
   const requestId = crypto.randomUUID();
-
-  track('frame_captured', userId, {
-    image_size_bytes: req.file.size,
-    mime_type: req.file.mimetype,
-  });
 
   try {
     const boosts = await getBoostScores().catch((error) => {
@@ -105,69 +135,10 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
     });
     logBoosts(boosts);
 
-    const imageBuffer = await fs.promises.readFile(req.file.path);
-    const frameHash = crypto
-      .createHash('sha256')
-      .update(imageBuffer)
-      .digest('hex');
-    const cachedSession = USE_POSTGRES
-      ? await findRecentSessionByFrameHash(frameHash, cacheCutoff)
-      : null;
-
-    if (cachedSession) {
-      console.log(`[Cache] hit for frameHash=${frameHash}`);
-      track('cache_hit', userId, { frameHash });
-
-      const boostedResult = applyBoostsToResults(
-        { frameItems: cachedSession.items || [], results: cachedSession.results || [] },
-        boosts
-      );
-
-      recordImpressions({
-        userId,
-        requestId,
-        frameItems: boostedResult.frameItems,
-        results: boostedResult.results,
-      }).catch((error) => {
-        console.error('[Boosts] Failed to record impressions:', error);
-      });
-
-      // Clean up uploaded file after processing
-      fs.unlink(req.file.path, (err) => {
-        if (err) console.error('Failed to delete temp file:', err);
-      });
-
-      return res.json({
-        frameItems: boostedResult.frameItems || [],
-        results: boostedResult.results || [],
-        sessionId: cachedSession.sessionId,
-        frameHash: cachedSession.frameHash,
-        requestId,
-        cached: true,
-      });
-    }
-
-    track('cache_miss', userId, { frameHash });
-
-    const sessionId = crypto.randomUUID();
     const result = await analyzeImage(req.file.path, {
       productSource: req.body?.productSource,
+      catalogSearch: buildCatalogSearchWithCache(userId),
     });
-    const timestampSec = Number(req.body?.timestampSec);
-    const sessionPayload = {
-      sessionId,
-      videoId: req.body?.videoId ? String(req.body.videoId) : undefined,
-      timestampSec: Number.isFinite(timestampSec) ? timestampSec : undefined,
-      frameHash,
-      items: result.frameItems || [],
-      results: result.results || [],
-    };
-
-    if (USE_POSTGRES) {
-      createSession(sessionPayload).catch((error) => {
-        console.error('[Postgres] Failed to store session:', error);
-      });
-    }
 
     const boostedResult = applyBoostsToResults(result, boosts);
 
@@ -176,17 +147,9 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
       requestId,
       frameItems: boostedResult.frameItems,
       results: boostedResult.results,
-    }).catch((error) => {
-      console.error('[Boosts] Failed to record impressions:', error);
-    });
-
-    track('items_detected', userId, {
-      items_detected_count: result.frameItems?.length || 0,
-    });
-
-    track('catalog_results_shown', userId, {
-      results_count: result.results?.length || 0,
-    });
+      }).catch((error) => {
+        console.error('[Boosts] Failed to record impressions:', error);
+      });
 
     // Clean up uploaded file after processing
     fs.unlink(req.file.path, (err) => {
@@ -195,18 +158,11 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
 
     res.json({
       ...boostedResult,
-      sessionId,
-      frameHash,
       requestId,
     });
   } catch (error) {
     // Clean up on error
     fs.unlink(req.file.path, () => {});
-
-    track('error_occurred', userId, {
-      error_message: error.message || 'Failed to analyze image',
-      error_stage: 'shop-frame',
-    });
 
     console.error('Gemini analysis error:', error);
     res.status(500).json({
@@ -218,7 +174,7 @@ app.post('/shop-frame', upload.single('frame'), async (req, res) => {
 
 // POST /track - accepts JSON for server-side tracking (e.g., product clicks)
 app.post('/track', (req, res) => {
-  const { eventName, userId, eventProps, userProps } = req.body || {};
+  const { eventName, userId, eventProps } = req.body || {};
 
   if (!eventName) {
     return res.status(400).json({ ok: false, error: 'eventName is required' });
@@ -237,7 +193,6 @@ app.post('/track', (req, res) => {
     });
   }
 
-  track(eventName, userId, eventProps, userProps);
   res.json({ ok: true });
 });
 
