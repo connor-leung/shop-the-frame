@@ -97,3 +97,4 @@ export interface RawVariant {
 export interface McpResult {
   content?: Array<{ type: string; text: string }>;
 }
+

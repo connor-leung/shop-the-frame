@@ -1,15 +1,5 @@
 import { getPrisma } from '../db/prisma.js';
-
-interface Product {
-  id?: string | null;
-  product_url?: string | null;
-  url?: string | null;
-  marketplace?: string | null;
-}
-
-interface ResultGroup {
-  products?: Product[];
-}
+import { ResultGroup, ProductResult } from '../types.js';
 
 export async function recordImpressions({ results }: { results: ResultGroup[] }): Promise<void> {
   if (!results?.length) return;
@@ -17,7 +7,7 @@ export async function recordImpressions({ results }: { results: ResultGroup[] })
   const prisma = getPrisma();
   const products = results.flatMap((r) => r.products ?? []);
 
-  const validProducts = products.filter((p): p is Product & { id: string } => Boolean(p.id));
+  const validProducts = products.filter((p): p is ProductResult & { id: string } => Boolean(p.id));
   console.log(
     `[Analytics] Recording ${validProducts.length} impression(s):`,
     validProducts.map((p) => p.id),
@@ -29,7 +19,7 @@ export async function recordImpressions({ results }: { results: ResultGroup[] })
         where: { productId: String(p.id) },
         create: {
           productId: String(p.id),
-          productUrl: p.product_url ?? p.url ?? null,
+          productUrl: p.url ?? null,
           platform: p.marketplace ?? null,
           impressions: 1,
         },

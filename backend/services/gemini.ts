@@ -6,7 +6,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { normalizeProductSource, searchCatalog } from './shopify.js';
+import { normalizeProductSource, searchCatalog } from './catalog.js';
 import { AnalyzeImageOptions, AnalyzeImageResult, CatalogSearchResult, FunctionCall, FrameItem, ProductResult, ResultGroup } from '../types.js';
 
 dotenv.config();

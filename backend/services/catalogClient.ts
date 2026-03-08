@@ -6,10 +6,6 @@ dotenv.config();
 const TOKEN_URL = process.env.TOKEN_URL || '';
 const MCP_ENDPOINT = process.env.MCP_ENDPOINT || '';
 
-if (!TOKEN_URL || !MCP_ENDPOINT) {
-  throw new Error('TOKEN_URL and MCP_ENDPOINT are required');
-}
-
 let tokenCache: TokenCache = {
   accessToken: null,
   expiresAt: 0,
@@ -17,6 +13,10 @@ let tokenCache: TokenCache = {
 
 async function getAccessToken(): Promise<string> {
   const now = Date.now();
+
+  if (!TOKEN_URL || !MCP_ENDPOINT) {
+    throw new Error('[Shopify] TOKEN_URL and MCP_ENDPOINT are required');
+  }
 
   if (tokenCache.accessToken && tokenCache.expiresAt > now + 60000) {
     console.log('[Shopify] Using cached token');

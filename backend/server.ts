@@ -7,7 +7,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { analyzeImage } from './services/gemini.js';
-import { normalizeProductSource, searchCatalog } from './services/shopify.js';
+import { normalizeProductSource, searchCatalog } from './services/catalog.js';
 import { recordClick, recordImpressions } from './analytics/boost.js';
 import { connectPrisma } from './db/prisma.js';
 
