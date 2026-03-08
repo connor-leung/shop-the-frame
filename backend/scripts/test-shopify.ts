@@ -22,10 +22,7 @@ async function main(): Promise<void> {
     console.log('   For now, using mock data...');
     console.log();
 
-    const { searchShopifyCatalog } = await import('../services/catalog.js');
-    const result = await searchShopifyCatalog(query, 3);
-    console.log('Mock Results:');
-    console.log(JSON.stringify(result, null, 2));
+    console.log('No credentials found. Exiting.');
     return;
   }
 

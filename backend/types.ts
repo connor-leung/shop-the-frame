@@ -1,3 +1,7 @@
+export interface CatalogProvider {
+  search(query: string, limit: number): Promise<CatalogSearchResult>;
+}
+
 // shopify.ts types
 export interface ProductResult {
   id: string | null;

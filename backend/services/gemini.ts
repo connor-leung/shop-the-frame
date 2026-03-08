@@ -51,26 +51,14 @@ const SEARCH_TOOL = {
   },
 };
 
-const AGENT_PROMPT = `You are a shopping assistant that helps users find and purchase items they see in YouTube videos.
+const AGENT_PROMPT = `You are a shopping assistant. Analyze this screenshot and identify 5-8 distinct purchasable physical products.
 
-Analyze this video screenshot carefully. Your task is to:
-1. Identify 5-8 distinct purchasable items visible in the image
-2. For EACH item, call the searchCatalog function with a detailed search query
+For each item, call searchCatalog with:
+- item: a short label (e.g., "black tee", "leather bag")
+- query: a specific, ecommerce-optimized search query with visible attributes (color, material, pattern, style, brand only if clearly readable)
+- confidence: how certain you are the item is correctly identified
 
-RULES FOR IDENTIFYING ITEMS:
-- Only identify physical products that can be purchased
-- Include specific details: color, material, pattern, style when clearly visible
-- Only include brand names if a logo or text is CLEARLY visible
-- Prioritize prominent, clearly visible items
-- Ignore: people's faces, backgrounds, UI elements, non-purchasable items
-
-RULES FOR SEARCH QUERIES:
-- Be specific and descriptive (e.g., "distressed light wash high waisted mom jeans" not "jeans")
-- Include color, material, style attributes when visible
-- Optimize for ecommerce search engines
-- Avoid generic words like "nice", "cool", "item"
-
-Make exactly 5-8 function calls, one for each distinct item you identify.`;
+Ignore faces, UI elements, backgrounds, and non-purchasable items. Prioritize prominent, clearly visible products.`;
 
 export async function analyzeImageWithFunctionCalling(
   imagePath: string,
