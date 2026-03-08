@@ -1,4 +1,4 @@
-const API_ENDPOINT = 'http://localhost:8000/shop-frame';
+const API_ENDPOINT = `${BASE_URL}/shop-frame`;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[Background] Received message:', message?.type);

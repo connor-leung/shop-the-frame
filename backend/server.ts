@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -10,6 +11,7 @@ import { analyzeImage } from './services/gemini.js';
 import { normalizeProductSource, searchCatalog } from './services/catalog.js';
 import { recordClick, recordImpressions } from './analytics/boost.js';
 import { connectPrisma } from './db/prisma.js';
+import { originAllowlist, getAllowedOrigins } from './middleware/allowlist.js';
 
 dotenv.config();
 
@@ -23,21 +25,32 @@ const PORT = process.env.PORT || 3000;
 
 app.use(
   cors({
-    origin: true,
+    origin: getAllowedOrigins(),
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   }),
 );
 
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  next();
-});
+app.use(originAllowlist);
 
 app.use(express.json());
+
+const shopFrameLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many requests, please try again later.' },
+});
+
+const trackLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many requests, please try again later.' },
+});
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -68,7 +81,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ ping: 'pong' });
 });
 
-app.post('/shop-frame', upload.single('frame'), async (req: Request, res: Response) => {
+app.post('/shop-frame', shopFrameLimit, upload.single('frame'), async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No image file provided' });
   }
@@ -98,7 +111,7 @@ app.post('/shop-frame', upload.single('frame'), async (req: Request, res: Respon
   }
 });
 
-app.post('/track', (req: Request, res: Response) => {
+app.post('/track', trackLimit, (req: Request, res: Response) => {
   const { eventName, eventProps } = req.body || {};
 
   if (!eventName) {
@@ -117,15 +130,12 @@ app.post('/track', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-app.get('/insights/products', (_req: Request, res: Response) => {
-  res.json({ products: [] });
-});
+// TODO: Implement /insights/products — return top products by impressions/clicks from product_analytics
+// app.get('/insights/products', (_req: Request, res: Response) => {
+//   res.json({ products: [] });
+// });
 
-app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Server error:', err);
 
   if (err instanceof multer.MulterError) {
