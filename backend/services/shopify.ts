@@ -1,31 +1,22 @@
-import { searchProducts, type NormalizedProduct } from './catalogClient.js';
+import { searchProducts } from './catalogClient.js';
+import { CatalogSearchResult, NormalizedProduct, ProductResult } from '../types.js';
 
 const FORCE_MOCK = process.env.SHOPIFY_USE_MOCK === 'true';
 const ALLOW_MOCK_FALLBACK = process.env.SHOPIFY_FALLBACK_TO_MOCK === 'true';
-const HAS_SHOPIFY_CREDS = Boolean(process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET);
-
-export interface ProductResult {
-  id: string | null;
-  title: string;
-  vendor: string | null;
-  price: string | null;
-  priceMax: string | null;
-  image: string | null;
-  url: string | null;
-  marketplace: string;
-}
-
-export interface CatalogSearchResult {
-  query: string;
-  products: ProductResult[];
-}
+const HAS_SHOPIFY_CREDS = Boolean(
+  process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET,
+);
 
 export function normalizeProductSource(source: string | undefined): string {
   if (source === 'amazon' || source === 'all') return source;
   return 'shopify';
 }
 
-export async function searchCatalog(query: string, limit = 5, source = 'shopify'): Promise<CatalogSearchResult> {
+export async function searchCatalog(
+  query: string,
+  limit = 5,
+  source = 'shopify',
+): Promise<CatalogSearchResult> {
   const normalizedSource = normalizeProductSource(source);
 
   if (normalizedSource === 'amazon') {
@@ -85,13 +76,21 @@ export async function searchShopifyCatalog(query: string, limit = 5): Promise<Ca
   }
 }
 
-async function searchMock(query: string, limit: number, marketplace = 'shopify'): Promise<CatalogSearchResult> {
+async function searchMock(
+  query: string,
+  limit: number,
+  marketplace = 'shopify',
+): Promise<CatalogSearchResult> {
   console.log(`[Shopify] Mock search (${marketplace}): "${query}" (limit: ${limit})`);
   await new Promise((resolve) => setTimeout(resolve, 100));
   return { query, products: generateMockProducts(query, limit, marketplace) };
 }
 
-function generateMockProducts(query: string, limit: number, marketplace = 'shopify'): ProductResult[] {
+function generateMockProducts(
+  query: string,
+  limit: number,
+  marketplace = 'shopify',
+): ProductResult[] {
   const words = query.toLowerCase().split(' ');
   const products: ProductResult[] = [];
 

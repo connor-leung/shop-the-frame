@@ -1,62 +1,13 @@
 import dotenv from 'dotenv';
+import { TokenCache, TokenResponse, McpResult, RawProduct, NormalizedProduct } from '../types.js';
+
 dotenv.config();
 
-const TOKEN_URL = 'https://api.shopify.com/auth/access_token';
-const MCP_ENDPOINT = 'https://discover.shopifyapps.com/global/mcp';
+const TOKEN_URL = process.env.TOKEN_URL || '';
+const MCP_ENDPOINT = process.env.MCP_ENDPOINT || '';
 
-interface TokenCache {
-  accessToken: string | null;
-  expiresAt: number;
-}
-
-interface TokenResponse {
-  access_token: string;
-  expires_in?: number;
-}
-
-export interface NormalizedProduct {
-  id: string | null;
-  title: string;
-  image_url: string | null;
-  min_price: string | null;
-  max_price: string | null;
-  product_url: string | null;
-  vendor: string | null;
-}
-
-interface RawProduct {
-  id?: string | null;
-  product_id?: string | null;
-  title?: string;
-  name?: string;
-  image_url?: string;
-  featured_image?: string;
-  images?: string[];
-  min_price?: string | number;
-  max_price?: string | number;
-  price?: string | number;
-  product_url?: string;
-  url?: string;
-  handle?: string;
-  vendor?: string;
-  brand?: string;
-  variants?: RawVariant[];
-  media?: { url?: string }[];
-  priceRange?: { min?: { amount?: number }; max?: { amount?: number } };
-  displayName?: string;
-  lookupUrl?: string;
-}
-
-interface RawVariant {
-  id?: string;
-  price?: { amount?: number };
-  media?: { url?: string }[];
-  variantUrl?: string;
-  shop?: { name?: string };
-}
-
-interface McpResult {
-  content?: Array<{ type: string; text: string }>;
+if (!TOKEN_URL || !MCP_ENDPOINT) {
+  throw new Error('TOKEN_URL and MCP_ENDPOINT are required');
 }
 
 let tokenCache: TokenCache = {
@@ -84,7 +35,11 @@ async function getAccessToken(): Promise<string> {
   const response = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'client_credentials',
+    }),
   });
 
   if (!response.ok) {
@@ -92,7 +47,7 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`Token request failed: ${response.status} - ${error}`);
   }
 
-  const data = await response.json() as TokenResponse;
+  const data = (await response.json()) as TokenResponse;
   const expiresIn = data.expires_in || 3600;
   tokenCache = { accessToken: data.access_token, expiresAt: now + expiresIn * 1000 };
 
@@ -100,7 +55,10 @@ async function getAccessToken(): Promise<string> {
   return tokenCache.accessToken as string;
 }
 
-async function executeMcpTool(toolName: string, input: Record<string, unknown>): Promise<McpResult> {
+async function executeMcpTool(
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<McpResult> {
   const token = await getAccessToken();
 
   const response = await fetch(MCP_ENDPOINT, {
@@ -119,7 +77,7 @@ async function executeMcpTool(toolName: string, input: Record<string, unknown>):
     throw new Error(`MCP request failed: ${response.status} - ${error}`);
   }
 
-  const result = await response.json() as { result: McpResult; error?: { message?: string } };
+  const result = (await response.json()) as { result: McpResult; error?: { message?: string } };
 
   if (result.error) {
     throw new Error(`MCP error: ${result.error.message || JSON.stringify(result.error)}`);
@@ -188,8 +146,12 @@ function normalizeProduct(product: RawProduct): NormalizedProduct {
   return {
     title: product.title || product.name || 'Unknown Product',
     image_url: product.image_url || product.featured_image || product.images?.[0] || null,
-    min_price: parsePrice(product.min_price || product.price || product.variants?.[0]?.price?.amount),
-    max_price: parsePrice(product.max_price || product.price || product.variants?.[0]?.price?.amount),
+    min_price: parsePrice(
+      product.min_price || product.price || product.variants?.[0]?.price?.amount,
+    ),
+    max_price: parsePrice(
+      product.max_price || product.price || product.variants?.[0]?.price?.amount,
+    ),
     product_url: product.product_url || product.url || product.handle || null,
     vendor: product.vendor || product.brand || null,
     id: product.id || product.product_id || null,

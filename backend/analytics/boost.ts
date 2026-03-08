@@ -18,22 +18,36 @@ export async function recordImpressions({ results }: { results: ResultGroup[] })
   const products = results.flatMap((r) => r.products ?? []);
 
   const validProducts = products.filter((p): p is Product & { id: string } => Boolean(p.id));
-  console.log(`[Analytics] Recording ${validProducts.length} impression(s):`, validProducts.map((p) => p.id));
+  console.log(
+    `[Analytics] Recording ${validProducts.length} impression(s):`,
+    validProducts.map((p) => p.id),
+  );
 
   await Promise.all(
     validProducts.map((p) =>
       prisma.productAnalytics.upsert({
         where: { productId: String(p.id) },
-        create: { productId: String(p.id), productUrl: p.product_url ?? p.url ?? null, platform: p.marketplace ?? null, impressions: 1 },
+        create: {
+          productId: String(p.id),
+          productUrl: p.product_url ?? p.url ?? null,
+          platform: p.marketplace ?? null,
+          impressions: 1,
+        },
         update: { impressions: { increment: 1 } },
-      })
-    )
+      }),
+    ),
   );
 
   console.log(`[Analytics] Impressions saved for ${validProducts.length} product(s)`);
 }
 
-export async function recordClick({ productId, productUrl }: { productId: string; productUrl?: string | null }): Promise<void> {
+export async function recordClick({
+  productId,
+  productUrl,
+}: {
+  productId: string;
+  productUrl?: string | null;
+}): Promise<void> {
   if (!productId) return;
 
   console.log(`[Analytics] Recording click for product: ${productId}`);

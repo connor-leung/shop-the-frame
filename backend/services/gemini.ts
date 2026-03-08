@@ -1,8 +1,13 @@
-import { GoogleGenerativeAI, SchemaType, type EnhancedGenerateContentResponse } from '@google/generative-ai';
+import {
+  GoogleGenerativeAI,
+  SchemaType,
+  type EnhancedGenerateContentResponse,
+} from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { normalizeProductSource, searchCatalog, type CatalogSearchResult, type ProductResult } from './shopify.js';
+import { normalizeProductSource, searchCatalog } from './shopify.js';
+import { AnalyzeImageOptions, AnalyzeImageResult, CatalogSearchResult, FunctionCall, FrameItem, ProductResult, ResultGroup } from '../types.js';
 
 dotenv.config();
 
@@ -25,7 +30,8 @@ const SEARCH_TOOL = {
     properties: {
       item: {
         type: SchemaType.STRING,
-        description: 'Short label for the item you identified (e.g., "black tee", "leather crossbody bag").',
+        description:
+          'Short label for the item you identified (e.g., "black tee", "leather crossbody bag").',
       },
       query: {
         type: SchemaType.STRING,
@@ -66,34 +72,9 @@ RULES FOR SEARCH QUERIES:
 
 Make exactly 5-8 function calls, one for each distinct item you identify.`;
 
-interface FunctionCall {
-  name: string;
-  args: Record<string, unknown>;
-}
-
-interface FrameItem {
-  item: string;
-  confidence: number;
-}
-
-interface ResultGroup {
-  item: { query: string; confidence: number };
-  products: ProductResult[];
-}
-
-export interface AnalyzeImageOptions {
-  productSource?: string;
-  catalogSearch?: (query: string, limit: number, source: string) => Promise<CatalogSearchResult>;
-}
-
-export interface AnalyzeImageResult {
-  frameItems: FrameItem[];
-  results: ResultGroup[];
-}
-
 export async function analyzeImageWithFunctionCalling(
   imagePath: string,
-  options: AnalyzeImageOptions = {}
+  options: AnalyzeImageOptions = {},
 ): Promise<AnalyzeImageResult> {
   const productSource = normalizeProductSource(options.productSource);
   const catalog =
@@ -135,7 +116,7 @@ export async function analyzeImageWithFunctionCalling(
         console.error(`[Gemini] Search failed for "${query}":`, (error as Error).message);
         return { query, products: [] };
       }
-    })
+    }),
   );
 
   const results = buildRankedResults(functionCalls, searchResults);
@@ -144,7 +125,10 @@ export async function analyzeImageWithFunctionCalling(
   return { frameItems, results };
 }
 
-function buildRankedResults(functionCalls: FunctionCall[], searchResults: CatalogSearchResult[]): ResultGroup[] {
+function buildRankedResults(
+  functionCalls: FunctionCall[],
+  searchResults: CatalogSearchResult[],
+): ResultGroup[] {
   const seenUrls = new Set<string>();
   const results: ResultGroup[] = [];
 
@@ -167,7 +151,13 @@ function buildRankedResults(functionCalls: FunctionCall[], searchResults: Catalo
 
 function extractFunctionCalls(response: EnhancedGenerateContentResponse): FunctionCall[] {
   const calls: FunctionCall[] = [];
-  const r = response as { candidates?: Array<{ content?: { parts?: Array<{ functionCall?: { name: string; args?: Record<string, unknown> } }> } }> };
+  const r = response as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ functionCall?: { name: string; args?: Record<string, unknown> } }>;
+      };
+    }>;
+  };
 
   for (const candidate of r.candidates || []) {
     for (const part of candidate.content?.parts || []) {
@@ -222,6 +212,9 @@ function toConfidence(value: unknown): number {
   return Math.max(0, Math.min(1, num));
 }
 
-export async function analyzeImage(imagePath: string, options: AnalyzeImageOptions = {}): Promise<AnalyzeImageResult> {
+export async function analyzeImage(
+  imagePath: string,
+  options: AnalyzeImageOptions = {},
+): Promise<AnalyzeImageResult> {
   return analyzeImageWithFunctionCalling(imagePath, options);
 }

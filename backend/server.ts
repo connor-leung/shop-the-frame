@@ -27,7 +27,7 @@ app.use(
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
-  })
+  }),
 );
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -65,7 +65,7 @@ const upload = multer({
 });
 
 app.post('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true });
+  res.json({ ping: 'pong' });
 });
 
 app.post('/shop-frame', upload.single('frame'), async (req: Request, res: Response) => {
