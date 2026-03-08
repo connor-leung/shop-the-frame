@@ -64,7 +64,7 @@ const upload = multer({
   },
 });
 
-app.post('/health', (_req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ ping: 'pong' });
 });
 

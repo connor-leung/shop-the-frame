@@ -27,14 +27,14 @@ services:
     env_file:
       - .env
     environment:
-      PORT: 3000
+      PORT: 8000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/shop-the-frame
       PGSSL: 'false'
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - '3000:3000'
+      - '8000:8000'
     volumes:
       - .:/app
       - /app/node_modules

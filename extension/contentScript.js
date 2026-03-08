@@ -2,7 +2,7 @@
 (function() {
   'use strict';
 
-  const API_ENDPOINT = 'http://localhost:3000/shop-frame';
+  const API_ENDPOINT = 'http://localhost:8000/shop-frame';
   const STORAGE_KEYS = {
     enabled: 'stfEnabled',
     productSource: 'stfProductSource',
@@ -930,7 +930,7 @@
 
   function trackProductClick(productId, productUrl) {
     if (!productId) return;
-    fetch('http://localhost:3000/track', {
+    fetch('http://localhost:8000/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
