@@ -264,7 +264,7 @@
     const chips = items.map((item, index) => `
       <button class="item-chip ${index === selectedIndex ? 'active' : ''}"
               data-index="${index}">
-        ${escapeHtml(item.item || item)}
+        ${escapeHtml(toTitleCase(item.item || item))}
       </button>
     `).join('');
 
@@ -707,6 +707,12 @@
     return 'Shopify';
   }
 
+  // Capitalize first letter of each word
+  function toTitleCase(text) {
+    if (!text) return '';
+    return text.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1));
+  }
+
   // Escape HTML to prevent XSS
   function escapeHtml(text) {
     if (!text) return '';
@@ -808,7 +814,7 @@
     return `
       <div class="product-section" data-section="${escapeHtml(section.id)}">
         <button class="section-toggle" data-section="${escapeHtml(section.id)}">
-          <span class="section-toggle-title">${escapeHtml(section.title)}</span>
+          <span class="section-toggle-title">${escapeHtml(toTitleCase(section.title))}</span>
           <span class="section-toggle-meta">${section.products.length}</span>
           <span class="section-toggle-icon ${isExpanded ? 'expanded' : ''}">
             ${icons.chevronDown}
@@ -932,7 +938,7 @@
     if (!productId) return;
     fetch(`${BASE_URL}/track`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
       body: JSON.stringify({
         eventName: 'product_clicked',
         eventProps: { productId, productUrl },

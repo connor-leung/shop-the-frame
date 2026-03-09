@@ -44,6 +44,7 @@ async function handleShopFrame(message) {
 
   const response = await fetch(API_ENDPOINT, {
     method: 'POST',
+    headers: { 'x-api-key': API_KEY },
     body: formData,
   });
 

@@ -12,6 +12,7 @@ import { normalizeProductSource, searchCatalog } from './services/catalog.js';
 import { recordClick, recordImpressions } from './analytics/boost.js';
 import { connectPrisma } from './db/prisma.js';
 import { originAllowlist, getAllowedOrigins } from './middleware/allowlist.js';
+import { requireApiKey } from './middleware/apiKey.js';
 
 dotenv.config();
 
@@ -81,7 +82,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ ping: 'pong' });
 });
 
-app.post('/shop-frame', shopFrameLimit, upload.single('frame'), async (req: Request, res: Response) => {
+app.post('/shop-frame', shopFrameLimit, requireApiKey, upload.single('frame'), async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No image file provided' });
   }
@@ -111,7 +112,7 @@ app.post('/shop-frame', shopFrameLimit, upload.single('frame'), async (req: Requ
   }
 });
 
-app.post('/track', trackLimit, (req: Request, res: Response) => {
+app.post('/track', trackLimit, requireApiKey, (req: Request, res: Response) => {
   const { eventName, eventProps } = req.body || {};
 
   if (!eventName) {
