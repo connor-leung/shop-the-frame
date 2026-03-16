@@ -38,23 +38,5 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-  pgadmin:
-    image: dpage/pgadmin4:8
-    container_name: shop-the-frame-pgadmin
-    restart: unless-stopped
-    logging:
-      driver: none
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - '5050:80'
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-
 volumes:
   postgres_data:
-  pgadmin_data:
