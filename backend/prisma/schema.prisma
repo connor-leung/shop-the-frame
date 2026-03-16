@@ -23,13 +23,29 @@ model CatalogQueryCache {
 }
 
 model ProductAnalytics {
-  id          BigInt   @id @default(autoincrement())
-  productId   String   @unique @map("product_id")
-  productUrl  String?  @map("product_url")
-  platform    String?
-  impressions Int      @default(0)
-  clicks      Int      @default(0)
+  id               BigInt                    @id @default(autoincrement())
+  productId        String                    @unique @map("product_id")
+  productUrl       String?                   @map("product_url")
+  platform         String?
+  impressions      Int                       @default(0)
+  clicks           Int                       @default(0)
+  monthlyAnalytics ProductAnalyticsMonthly[]
 
   @@index([impressions(sort: Desc)], map: "idx_product_analytics_impressions")
   @@map("product_analytics")
+}
+
+model ProductAnalyticsMonthly {
+  id                 BigInt           @id @default(autoincrement())
+  productAnalyticsId BigInt           @map("product_analytics_id")
+  month              Int
+  year               Int
+  clicks             Int              @default(0)
+  impressions        Int              @default(0)
+
+  productAnalytics   ProductAnalytics @relation(fields: [productAnalyticsId], references: [id])
+
+  @@unique([productAnalyticsId, month, year], map: "uq_product_analytics_monthly")
+  @@index([productAnalyticsId], map: "idx_product_analytics_monthly_product")
+  @@map("product_analytics_monthly")
 }

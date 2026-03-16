@@ -1,3 +1,5 @@
+importScripts('config.js');
+
 const API_ENDPOINT = `${BASE_URL}/shop-frame`;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

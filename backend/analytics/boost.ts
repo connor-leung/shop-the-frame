@@ -13,9 +13,13 @@ export async function recordImpressions({ results }: { results: ResultGroup[] })
     validProducts.map((p) => p.id),
   );
 
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
   await Promise.all(
-    validProducts.map((p) =>
-      prisma.productAnalytics.upsert({
+    validProducts.map(async (p) => {
+      const record = await prisma.productAnalytics.upsert({
         where: { productId: String(p.id) },
         create: {
           productId: String(p.id),
@@ -24,8 +28,13 @@ export async function recordImpressions({ results }: { results: ResultGroup[] })
           impressions: 1,
         },
         update: { impressions: { increment: 1 } },
-      }),
-    ),
+      });
+      await prisma.productAnalyticsMonthly.upsert({
+        where: { productAnalyticsId_month_year: { productAnalyticsId: record.id, month, year } },
+        create: { productAnalyticsId: record.id, month, year, impressions: 1 },
+        update: { impressions: { increment: 1 } },
+      });
+    }),
   );
 
   console.log(`[Analytics] Impressions saved for ${validProducts.length} product(s)`);
@@ -43,9 +52,18 @@ export async function recordClick({
   console.log(`[Analytics] Recording click for product: ${productId}`);
 
   const prisma = getPrisma();
-  await prisma.productAnalytics.upsert({
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const record = await prisma.productAnalytics.upsert({
     where: { productId: String(productId) },
     create: { productId: String(productId), productUrl: productUrl ?? null, clicks: 1 },
+    update: { clicks: { increment: 1 } },
+  });
+  await prisma.productAnalyticsMonthly.upsert({
+    where: { productAnalyticsId_month_year: { productAnalyticsId: record.id, month, year } },
+    create: { productAnalyticsId: record.id, month, year, clicks: 1 },
     update: { clicks: { increment: 1 } },
   });
 

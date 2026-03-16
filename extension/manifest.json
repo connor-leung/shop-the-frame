@@ -4,10 +4,7 @@
   "version": "1.0.0",
   "description": "Shop items from YouTube video frames",
   "permissions": ["storage"],
-  "host_permissions": [
-    "https://www.youtube.com/*",
-    "http://localhost:8000/*"
-  ],
+  "host_permissions": ["https://www.youtube.com/*", "http://localhost:8000/*"],
   "action": {
     "default_title": "Shop This Frame Settings",
     "default_popup": "popup.html"
