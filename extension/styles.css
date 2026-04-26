@@ -2,8 +2,8 @@
 
 /* CSS Variables */
 :root {
-  --shopify-green: #008060;
-  --shopify-green-hover: #006e52;
+  --primary: #764BA2;
+  --primary-hover: #6a4394;
   --white: #ffffff;
   --gray-50: #f6f6f7;
   --gray-100: #f1f2f3;
@@ -86,7 +86,7 @@ html[dark] {
 .panel-header-title svg {
   width: 16px;
   height: 16px;
-  color: var(--shopify-green);
+  color: var(--primary);
 }
 
 .panel-header h2 {
@@ -169,9 +169,9 @@ html[dark] {
 }
 
 .item-chip.active {
-  background: var(--shopify-green);
+  background: var(--primary);
   color: white;
-  border-color: var(--shopify-green);
+  border-color: var(--primary);
 }
 
 .item-chip:not(.active) {
@@ -341,7 +341,7 @@ html[dark] {
 .shopify-badge-icon {
   width: 16px;
   height: 16px;
-  background: var(--shopify-green);
+  background: var(--primary);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -402,8 +402,8 @@ html[dark] {
 }
 
 .view-btn:hover {
-  color: var(--shopify-green);
-  border-color: var(--shopify-green);
+  color: var(--primary);
+  border-color: var(--primary);
   background: var(--gray-50);
 }
 
@@ -506,7 +506,7 @@ html[dark] {
   padding: 0;
   font-size: 14px;
   font-weight: 500;
-  color: var(--shopify-green);
+  color: var(--primary);
   cursor: pointer;
 }
 
