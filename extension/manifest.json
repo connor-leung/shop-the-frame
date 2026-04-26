@@ -18,8 +18,7 @@
     }
   ],
   "background": {
-    "service_worker": "background.js",
-    "scripts": ["config.js", "background.js"]
+    "service_worker": "background.js"
   },
   "icons": {
     "32": "icons/shopping-logo-32x32.png",
