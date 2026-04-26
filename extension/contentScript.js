@@ -30,10 +30,22 @@
   // SVG Icons
   // ============================================
   const icons = {
-    shoppingBag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-      <line x1="3" y1="6" x2="21" y2="6"/>
-      <path d="M16 10a4 4 0 0 1-8 0"/>
+    shoppingBag: `<svg width="32" height="32" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="100" cy="100" r="100" fill="url(#stfGradient)" />
+      <rect x="55" y="75" width="90" height="70" rx="4" fill="white" />
+      <path d="M75 75C75 65 82 55 100 55C118 55 125 65 125 75" stroke="white" stroke-width="8" stroke-linecap="round" fill="none" />
+      <g transform="translate(125, 90) rotate(15)">
+        <rect x="0" y="0" width="30" height="40" rx="3" fill="#FF6B6B" />
+        <circle cx="15" cy="8" r="3" fill="white" />
+        <text x="15" y="28" text-anchor="middle" fill="white" font-size="18" font-weight="bold">%</text>
+      </g>
+      <path d="M50 70L52 75L47 77L52 79L50 84L48 79L43 77L48 75L50 70Z" fill="#FFD700" />
+      <defs>
+        <linearGradient id="stfGradient" x1="0" y1="0" x2="200" y2="200">
+          <stop offset="0%" stop-color="#667EEA" />
+          <stop offset="100%" stop-color="#764BA2" />
+        </linearGradient>
+      </defs>
     </svg>`,
     close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <line x1="18" y1="6" x2="6" y2="18"/>
