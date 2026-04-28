@@ -60,6 +60,29 @@ For each item, call searchCatalog with:
 
 Ignore faces, UI elements, backgrounds, and non-purchasable items. Prioritize prominent, clearly visible products.`;
 
+async function generateWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      const is429 =
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        (error as { status: number }).status === 429;
+
+      if (is429 && attempt < maxRetries) {
+        const delay = Math.min(1000 * 2 ** attempt, 30000);
+        console.warn(`[Gemini] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error('unreachable');
+}
+
 export async function analyzeImageWithFunctionCalling(
   imagePath: string,
   options: AnalyzeImageOptions = {},
@@ -71,7 +94,7 @@ export async function analyzeImageWithFunctionCalling(
       : (query: string, limit: number, source: string) => searchCatalog(query, limit, source);
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-flash-latest',
     tools: [{ functionDeclarations: [SEARCH_TOOL] }],
   });
 
@@ -82,10 +105,12 @@ export async function analyzeImageWithFunctionCalling(
 
   console.log('[Gemini] Starting search query generation with function calling...');
 
-  const result = await model.generateContent([
-    AGENT_PROMPT,
-    { inlineData: { mimeType, data: base64Image } },
-  ]);
+  const result = await generateWithRetry(() =>
+    model.generateContent([
+      AGENT_PROMPT,
+      { inlineData: { mimeType, data: base64Image } },
+    ]),
+  );
 
   const response = result.response;
   const functionCalls = extractFunctionCalls(response);
