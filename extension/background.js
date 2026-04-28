@@ -2,13 +2,24 @@ importScripts('config.js');
 
 const API_ENDPOINT = `${BASE_URL}/shop-frame`;
 
+const inFlight = new Set();
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[Background] Received message:', message?.type);
-  
+
   if (!message || message.type !== 'shopFrame') {
     return false;
   }
 
+  const tabId = sender?.tab?.id ?? 'unknown';
+
+  if (inFlight.has(tabId)) {
+    console.log('[Background] Request already in flight for tab', tabId, '— dropping duplicate');
+    sendResponse({ ok: false, error: 'Request already in progress' });
+    return true;
+  }
+
+  inFlight.add(tabId);
   console.log('[Background] Processing shopFrame request...');
   console.log('[Background] imageBase64 length:', message.imageBase64?.length);
 
@@ -22,6 +33,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     .catch((error) => {
       console.error('[Background] Error:', error);
       sendResponse({ ok: false, error: error.message || 'Request failed' });
+    })
+    .finally(() => {
+      inFlight.delete(tabId);
     });
 
   return true;

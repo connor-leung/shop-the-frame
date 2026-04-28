@@ -296,6 +296,7 @@
     const productUrl = getProductUrl(product);
     const merchantName = getMerchantName(product);
     const sourceLabel = getMarketplaceLabel(product);
+    const isShopify = (product?.marketplace || product?.source || extensionSettings.productSource) !== 'amazon';
 
     return `
       <div class="product-card" data-url="${escapeHtml(productUrl)}" data-id="${escapeHtml(product.id || '')}">
@@ -309,7 +310,7 @@
             <h4 class="product-title">${escapeHtml(product.title || 'Untitled product')}</h4>
             <div class="product-meta">
               <div class="shopify-badge">
-                <div class="shopify-badge-icon">
+                <div class="shopify-badge-icon${isShopify ? ' shopify-badge-icon--shopify' : ''}">
                   ${icons.shopifyBolt}
                 </div>
                 <span>${escapeHtml(sourceLabel)}</span>

@@ -348,6 +348,10 @@ html[dark] {
   justify-content: center;
 }
 
+.shopify-badge-icon--shopify {
+  background: #96bf48;
+}
+
 .shopify-badge-icon svg {
   width: 10px;
   height: 10px;
