@@ -293,7 +293,7 @@ export default function DemoPage() {
                         Analyzing frame…
                       </>
                     ) : (
-                      'Shop this frame'
+                      'Shop the frame'
                     )}
                   </button>
                 </div>

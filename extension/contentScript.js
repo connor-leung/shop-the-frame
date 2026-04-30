@@ -1,29 +1,29 @@
 // Shop the Frame - Content Script
-(function() {
-  'use strict';
+(function () {
+  "use strict";
 
   const API_ENDPOINT = `${BASE_URL}/shop-frame`;
   const STORAGE_KEYS = {
-    enabled: 'stfEnabled',
-    productSource: 'stfProductSource',
+    enabled: "stfEnabled",
+    productSource: "stfProductSource",
   };
 
   // State
   let panel = null;
   let currentFrameBlob = null;
-  let currentTimestamp = '00:00';
+  let currentTimestamp = "00:00";
   let detectedItems = [];
   let selectedItemIndex = 0;
   let currentProducts = [];
   let currentResults = [];
-  let viewState = 'idle'; // idle, loading, results, error, empty
+  let viewState = "idle"; // idle, loading, results, error, empty
   let expandedSections = new Set();
   let sidebarObserver = null;
   let watchedVideo = null;
   let lastAutoScanTime = null;
   let extensionSettings = {
     enabled: true,
-    productSource: 'shopify',
+    productSource: "shopify",
   };
 
   // ============================================
@@ -69,7 +69,7 @@
     </svg>`,
     shopifyBolt: `<svg viewBox="0 0 20 20" fill="white">
       <path d="M12.4 3.5L11.5 8.5H15.5L8.5 16.5L9.5 11.5H5.5L12.4 3.5Z"/>
-    </svg>`
+    </svg>`,
   };
 
   // ============================================
@@ -83,28 +83,28 @@
       return;
     }
 
-    const existingButton = document.getElementById('shop-frame-btn');
+    const existingButton = document.getElementById("shop-frame-btn");
     if (existingButton) {
       existingButton.remove();
     }
 
-    if (!panel || !document.getElementById('shop-frame-panel')) {
+    if (!panel || !document.getElementById("shop-frame-panel")) {
       createPanel();
       updateDynamicContent();
     } else {
-      panel = document.getElementById('shop-frame-panel');
+      panel = document.getElementById("shop-frame-panel");
     }
 
     mountPanelInSidebar();
-    panel.classList.add('open');
+    panel.classList.add("open");
     attachPauseTrigger();
 
-    console.log('[Shop the Frame] Extension initialized');
+    console.log("[Shop the Frame] Extension initialized");
   }
 
   function teardown() {
     if (watchedVideo) {
-      watchedVideo.removeEventListener('pause', handleVideoPause);
+      watchedVideo.removeEventListener("pause", handleVideoPause);
       watchedVideo = null;
     }
 
@@ -113,7 +113,7 @@
       sidebarObserver = null;
     }
 
-    const existingPanel = document.getElementById('shop-frame-panel');
+    const existingPanel = document.getElementById("shop-frame-panel");
     if (existingPanel) {
       existingPanel.remove();
     }
@@ -122,13 +122,17 @@
   }
 
   function findSidebarContainer() {
-    return document.querySelector('ytd-watch-next-secondary-results-renderer #secondary-inner')
-      || document.querySelector('#secondary #secondary-inner')
-      || document.querySelector('#secondary');
+    return (
+      document.querySelector(
+        "ytd-watch-next-secondary-results-renderer #secondary-inner",
+      ) ||
+      document.querySelector("#secondary #secondary-inner") ||
+      document.querySelector("#secondary")
+    );
   }
 
   function mountPanelInSidebar(retries = 12) {
-    if (!location.href.includes('youtube.com/watch')) return;
+    if (!location.href.includes("youtube.com/watch")) return;
     if (!panel) return;
 
     const sidebar = findSidebarContainer();
@@ -140,7 +144,9 @@
     }
 
     if (panel.parentElement !== sidebar) {
-      const chipRow = sidebar.querySelector('ytd-feed-filter-chip-bar-renderer, #chips-wrapper');
+      const chipRow = sidebar.querySelector(
+        "ytd-feed-filter-chip-bar-renderer, #chips-wrapper",
+      );
       if (chipRow) {
         sidebar.insertBefore(panel, chipRow);
       } else {
@@ -158,7 +164,7 @@
     }
 
     sidebarObserver = new MutationObserver(() => {
-      if (!document.getElementById('shop-frame-panel')) {
+      if (!document.getElementById("shop-frame-panel")) {
         mountPanelInSidebar(0);
       }
     });
@@ -169,7 +175,7 @@
   function attachPauseTrigger(retries = 10) {
     if (!extensionSettings.enabled) return;
 
-    const video = document.querySelector('video');
+    const video = document.querySelector("video");
 
     if (!video) {
       if (retries > 0) {
@@ -179,23 +185,26 @@
     }
 
     if (watchedVideo && watchedVideo !== video) {
-      watchedVideo.removeEventListener('pause', handleVideoPause);
+      watchedVideo.removeEventListener("pause", handleVideoPause);
     }
 
     if (watchedVideo !== video) {
       watchedVideo = video;
-      watchedVideo.addEventListener('pause', handleVideoPause);
+      watchedVideo.addEventListener("pause", handleVideoPause);
     }
   }
 
   async function handleVideoPause() {
     if (!extensionSettings.enabled) return;
 
-    const video = watchedVideo || document.querySelector('video');
+    const video = watchedVideo || document.querySelector("video");
     if (!video) return;
 
     const roundedTime = Number(video.currentTime.toFixed(2));
-    if (lastAutoScanTime !== null && Math.abs(lastAutoScanTime - roundedTime) < 0.2) {
+    if (
+      lastAutoScanTime !== null &&
+      Math.abs(lastAutoScanTime - roundedTime) < 0.2
+    ) {
       return;
     }
 
@@ -207,11 +216,11 @@
   // Create Side Panel
   // ============================================
   function createPanel() {
-    panel = document.createElement('div');
-    panel.id = 'shop-frame-panel';
+    panel = document.createElement("div");
+    panel.id = "shop-frame-panel";
     panel.innerHTML = renderPanelStructure();
 
-    panel.querySelector('.close-btn').addEventListener('click', closePanel);
+    panel.querySelector(".close-btn").addEventListener("click", closePanel);
     document.body.appendChild(panel);
   }
 
@@ -271,14 +280,18 @@
 
   // Render item chips for detected items
   function renderItemChips(items, selectedIndex) {
-    if (!items || items.length === 0) return '';
+    if (!items || items.length === 0) return "";
 
-    const chips = items.map((item, index) => `
-      <button class="item-chip ${index === selectedIndex ? 'active' : ''}"
+    const chips = items
+      .map(
+        (item, index) => `
+      <button class="item-chip ${index === selectedIndex ? "active" : ""}"
               data-index="${index}">
         ${escapeHtml(toTitleCase(item.item || item))}
       </button>
-    `).join('');
+    `,
+      )
+      .join("");
 
     return `
       <div class="detected-items-section">
@@ -296,26 +309,29 @@
     const productUrl = getProductUrl(product);
     const merchantName = getMerchantName(product);
     const sourceLabel = getMarketplaceLabel(product);
-    const isShopify = (product?.marketplace || product?.source || extensionSettings.productSource) !== 'amazon';
+    const isShopify =
+      (product?.marketplace ||
+        product?.source ||
+        extensionSettings.productSource) !== "amazon";
 
     return `
-      <div class="product-card" data-url="${escapeHtml(productUrl)}" data-id="${escapeHtml(product.id || '')}">
+      <div class="product-card" data-url="${escapeHtml(productUrl)}" data-id="${escapeHtml(product.id || "")}">
         <div class="product-card-inner">
           <div class="product-image">
             <img src="${escapeHtml(imageUrl)}"
-                 alt="${escapeHtml(product.title || 'Product image')}"
+                 alt="${escapeHtml(product.title || "Product image")}"
                  onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22%3E%3Crect fill=%22%23374151%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2240%22 y=%2244%22 font-family=%22sans-serif%22 font-size=%2210%22 fill=%22%239CA3AF%22 text-anchor=%22middle%22%3ENo image%3C/text%3E%3C/svg%3E'"/>
           </div>
           <div class="product-info">
-            <h4 class="product-title">${escapeHtml(product.title || 'Untitled product')}</h4>
+            <h4 class="product-title">${escapeHtml(product.title || "Untitled product")}</h4>
             <div class="product-meta">
               <div class="shopify-badge">
-                <div class="shopify-badge-icon${isShopify ? ' shopify-badge-icon--shopify' : ''}">
+                <div class="shopify-badge-icon${isShopify ? " shopify-badge-icon--shopify" : ""}">
                   ${icons.shopifyBolt}
                 </div>
                 <span>${escapeHtml(sourceLabel)}</span>
               </div>
-              ${merchantName ? `<div class="merchant-name">${icons.storefront}<span>${escapeHtml(merchantName)}</span></div>` : ''}
+              ${merchantName ? `<div class="merchant-name">${icons.storefront}<span>${escapeHtml(merchantName)}</span></div>` : ""}
             </div>
             <div class="product-footer">
               <span class="product-price">${priceDisplay}</span>
@@ -348,12 +364,17 @@
       return renderEmptyState();
     }
 
-    const totalCount = sections.reduce((total, section) => total + section.products.length, 0);
-    const sectionMarkup = sections.map(section => renderProductSection(section)).join('');
+    const totalCount = sections.reduce(
+      (total, section) => total + section.products.length,
+      0,
+    );
+    const sectionMarkup = sections
+      .map((section) => renderProductSection(section))
+      .join("");
 
     return `
       <div class="products-section">
-        <h3 class="section-title">${totalCount} product${totalCount !== 1 ? 's' : ''} found</h3>
+        <h3 class="section-title">${totalCount} product${totalCount !== 1 ? "s" : ""} found</h3>
         <div class="product-sections">
           ${sectionMarkup}
         </div>
@@ -375,9 +396,10 @@
 
   // Render empty state
   function renderEmptyState() {
-    const sourceLabel = extensionSettings.productSource === 'all'
-      ? 'our supported stores'
-      : `${getSourceLabel(extensionSettings.productSource)} sellers`;
+    const sourceLabel =
+      extensionSettings.productSource === "all"
+        ? "our supported stores"
+        : `${getSourceLabel(extensionSettings.productSource)} sellers`;
 
     return `
       <div class="empty-state">
@@ -393,7 +415,7 @@
   function renderIdleState() {
     return `
       <div class="idle-message">
-        <p>Click "Shop this frame" to find shoppable items in the current video frame.</p>
+        <p>Click "shop the frame" to find shoppable items in the current video frame.</p>
       </div>
     `;
   }
@@ -402,37 +424,39 @@
   // Update Dynamic Content
   // ============================================
   function updateDynamicContent() {
-    const container = panel.querySelector('#dynamic-content');
+    const container = panel.querySelector("#dynamic-content");
     if (!container) return;
 
-    let html = '';
+    let html = "";
 
     switch (viewState) {
-      case 'idle':
+      case "idle":
         html = renderIdleState();
         break;
 
-      case 'loading':
+      case "loading":
         html = renderSkeletonLoader();
         break;
 
-      case 'results':
+      case "results":
         html = renderItemChips(detectedItems, selectedItemIndex);
-        html += renderProducts(currentResults.length ? currentResults : currentProducts);
+        html += renderProducts(
+          currentResults.length ? currentResults : currentProducts,
+        );
         break;
 
-      case 'error':
+      case "error":
         html = renderItemChips(detectedItems, selectedItemIndex);
         html += renderErrorState();
         break;
 
-      case 'empty':
+      case "empty":
         html = renderEmptyState();
         break;
     }
 
-    const isCompactState = viewState === 'empty' || viewState === 'idle';
-    panel.classList.toggle('compact', isCompactState);
+    const isCompactState = viewState === "empty" || viewState === "idle";
+    panel.classList.toggle("compact", isCompactState);
     container.innerHTML = html;
 
     // Attach event listeners
@@ -443,15 +467,15 @@
   // Update CTA Button State
   // ============================================
   function updateCTAButton() {
-    const ctaBtn = panel.querySelector('#shop-cta-btn');
+    const ctaBtn = panel.querySelector("#shop-cta-btn");
     if (!ctaBtn) return;
 
-    if (viewState === 'loading') {
+    if (viewState === "loading") {
       ctaBtn.disabled = true;
       ctaBtn.innerHTML = `${icons.spinner} Analyzing frame…`;
     } else {
       ctaBtn.disabled = false;
-      ctaBtn.innerHTML = 'Shop this frame';
+      ctaBtn.innerHTML = "shop the frame";
     }
   }
 
@@ -460,40 +484,40 @@
   // ============================================
   function attachDynamicEventListeners() {
     // Item chips
-    panel.querySelectorAll('.item-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
+    panel.querySelectorAll(".item-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
         const index = parseInt(chip.dataset.index, 10);
         handleItemChipClick(index);
       });
     });
 
     // Product cards - View button
-    panel.querySelectorAll('.product-card .view-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    panel.querySelectorAll(".product-card .view-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const card = btn.closest('.product-card');
+        const card = btn.closest(".product-card");
         const url = card.dataset.url;
-        if (url && url !== '#') {
+        if (url && url !== "#") {
           trackProductClick(card.dataset.id, url);
-          window.open(url, '_blank');
+          window.open(url, "_blank");
         }
       });
     });
 
     // Product cards - Full card click
-    panel.querySelectorAll('.product-card').forEach(card => {
-      card.addEventListener('click', () => {
+    panel.querySelectorAll(".product-card").forEach((card) => {
+      card.addEventListener("click", () => {
         const url = card.dataset.url;
-        if (url && url !== '#') {
+        if (url && url !== "#") {
           trackProductClick(card.dataset.id, url);
-          window.open(url, '_blank');
+          window.open(url, "_blank");
         }
       });
     });
 
     // Section toggles
-    panel.querySelectorAll('.section-toggle').forEach(toggle => {
-      toggle.addEventListener('click', () => {
+    panel.querySelectorAll(".section-toggle").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
         const sectionId = toggle.dataset.section;
         if (!sectionId) return;
         handleSectionToggle(sectionId);
@@ -501,15 +525,15 @@
     });
 
     // Try again button
-    const tryAgainBtn = panel.querySelector('#try-again-btn');
+    const tryAgainBtn = panel.querySelector("#try-again-btn");
     if (tryAgainBtn) {
-      tryAgainBtn.addEventListener('click', handleTryAgain);
+      tryAgainBtn.addEventListener("click", handleTryAgain);
     }
 
     // CTA button
-    const ctaBtn = panel.querySelector('#shop-cta-btn');
+    const ctaBtn = panel.querySelector("#shop-cta-btn");
     if (ctaBtn) {
-      ctaBtn.addEventListener('click', handleCTAClick);
+      ctaBtn.addEventListener("click", handleCTAClick);
     }
   }
 
@@ -519,10 +543,10 @@
 
   // Handle floating button click
   async function handleShopClick() {
-    const video = document.querySelector('video');
+    const video = document.querySelector("video");
 
     if (!video) {
-      alert('No video found on this page');
+      alert("No video found on this page");
       return;
     }
 
@@ -542,8 +566,8 @@
       showPanel();
       await startAnalysis();
     } catch (error) {
-      console.error('[Shop the Frame] Error:', error);
-      alert('Failed to capture frame: ' + error.message);
+      console.error("[Shop the Frame] Error:", error);
+      alert("Failed to capture frame: " + error.message);
     }
   }
 
@@ -553,15 +577,15 @@
   }
 
   async function startAnalysis() {
-    if (viewState === 'loading') return;
+    if (viewState === "loading") return;
     if (!extensionSettings.enabled) return;
 
     if (!currentFrameBlob) {
-      console.error('[Shop the Frame] No frame captured');
+      console.error("[Shop the Frame] No frame captured");
       return;
     }
 
-    viewState = 'loading';
+    viewState = "loading";
     updateCTAButton();
     updateDynamicContent();
 
@@ -575,15 +599,18 @@
     expandedSections.add(sectionId);
     updateDynamicContent();
     requestAnimationFrame(() => {
-      const sectionEl = panel.querySelector(`.product-section[data-section="${sectionId}"]`);
-      const scrollContainer = panel.querySelector('.panel-content');
+      const sectionEl = panel.querySelector(
+        `.product-section[data-section="${sectionId}"]`,
+      );
+      const scrollContainer = panel.querySelector(".panel-content");
       if (sectionEl && scrollContainer) {
         const sectionRect = sectionEl.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
-        const targetTop = scrollContainer.scrollTop + (sectionRect.top - containerRect.top) - 8;
+        const targetTop =
+          scrollContainer.scrollTop + (sectionRect.top - containerRect.top) - 8;
         scrollContainer.scrollTo({
           top: Math.max(targetTop, 0),
-          behavior: 'smooth'
+          behavior: "smooth",
         });
       }
     });
@@ -591,7 +618,7 @@
 
   // Handle try again click
   function handleTryAgain() {
-    viewState = 'idle';
+    viewState = "idle";
     updateDynamicContent();
     updateCTAButton();
   }
@@ -614,21 +641,24 @@
   function captureFrame(video) {
     return new Promise((resolve, reject) => {
       try {
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        canvas.toBlob((blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Failed to capture frame'));
-          }
-        }, 'image/jpeg', 0.9);
-
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Failed to capture frame"));
+            }
+          },
+          "image/jpeg",
+          0.9,
+        );
       } catch (error) {
         reject(error);
       }
@@ -639,24 +669,27 @@
   function formatVideoTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   }
 
   // Format price display
   function formatPrice(product) {
     if (product.priceMin !== undefined && product.priceMax !== undefined) {
       if (product.priceMin === product.priceMax) {
-        return formatCurrency(product.priceMin, product.currency || 'USD');
+        return formatCurrency(product.priceMin, product.currency || "USD");
       }
-      return `${formatCurrency(product.priceMin, product.currency || 'USD')} - ${formatCurrency(product.priceMax, product.currency || 'USD')}`;
+      return `${formatCurrency(product.priceMin, product.currency || "USD")} - ${formatCurrency(product.priceMax, product.currency || "USD")}`;
     }
     if (product.price !== undefined) {
-      return formatCurrency(product.price, product.currency || 'USD');
+      return formatCurrency(product.price, product.currency || "USD");
     }
     if (product.priceRange) {
       const minAmount = normalizeAmount(product.priceRange.min?.amount);
       const maxAmount = normalizeAmount(product.priceRange.max?.amount);
-      const currency = product.priceRange.min?.currency || product.priceRange.max?.currency || 'USD';
+      const currency =
+        product.priceRange.min?.currency ||
+        product.priceRange.max?.currency ||
+        "USD";
       if (minAmount !== null && maxAmount !== null) {
         if (minAmount === maxAmount) {
           return formatCurrency(minAmount, currency);
@@ -664,12 +697,13 @@
         return `${formatCurrency(minAmount, currency)} - ${formatCurrency(maxAmount, currency)}`;
       }
     }
-    return 'Price unavailable';
+    return "Price unavailable";
   }
 
   function normalizeAmount(amount) {
     if (amount === null || amount === undefined) return null;
-    const value = typeof amount === 'string' ? Number.parseFloat(amount) : amount;
+    const value =
+      typeof amount === "string" ? Number.parseFloat(amount) : amount;
     if (!Number.isFinite(value)) return null;
     if (Number.isInteger(value) && Math.abs(value) >= 1000) {
       return value / 100;
@@ -679,11 +713,11 @@
 
   function formatCurrency(amount, currency) {
     const normalized = normalizeAmount(amount);
-    if (normalized === null) return 'Price unavailable';
+    if (normalized === null) return "Price unavailable";
     try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency,
       }).format(normalized);
     } catch (error) {
       return `$${normalized.toFixed(2)}`;
@@ -695,41 +729,52 @@
       return product.media[0].url;
     }
     if (product.image) return product.image;
-    return 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22%3E%3Crect fill=%22%23374151%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2240%22 y=%2244%22 font-family=%22sans-serif%22 font-size=%2210%22 fill=%22%239CA3AF%22 text-anchor=%22middle%22%3ENo image%3C/text%3E%3C/svg%3E';
+    return "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22%3E%3Crect fill=%22%23374151%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2240%22 y=%2244%22 font-family=%22sans-serif%22 font-size=%2210%22 fill=%22%239CA3AF%22 text-anchor=%22middle%22%3ENo image%3C/text%3E%3C/svg%3E";
   }
 
   function getProductUrl(product) {
-    return product.lookupUrl || product.variantUrl || product.url || '#';
+    return product.lookupUrl || product.variantUrl || product.url || "#";
   }
 
   function getMerchantName(product) {
     if (product.shop?.name) return product.shop.name;
-    if (product.variants && product.variants.length && product.variants[0].shop?.name) {
+    if (
+      product.variants &&
+      product.variants.length &&
+      product.variants[0].shop?.name
+    ) {
       return product.variants[0].shop.name;
     }
-    return '';
+    return "";
   }
 
   function getMarketplaceLabel(product) {
-    return getSourceLabel(product?.marketplace || product?.source || extensionSettings.productSource);
+    return getSourceLabel(
+      product?.marketplace ||
+        product?.source ||
+        extensionSettings.productSource,
+    );
   }
 
   function getSourceLabel(source) {
-    if (source === 'amazon') return 'Amazon';
-    if (source === 'all') return 'Stores';
-    return 'Shopify';
+    if (source === "amazon") return "Amazon";
+    if (source === "all") return "Stores";
+    return "Shopify";
   }
 
   // Capitalize first letter of each word
   function toTitleCase(text) {
-    if (!text) return '';
-    return text.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1));
+    if (!text) return "";
+    return text.replace(
+      /\w\S*/g,
+      (word) => word.charAt(0).toUpperCase() + word.slice(1),
+    );
   }
 
   // Escape HTML to prevent XSS
   function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
+    if (!text) return "";
+    const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
@@ -741,11 +786,13 @@
 
     if (!items || items.length === 0) {
       if (!validProducts.length) return [];
-      return [{
-        id: 'section-all',
-        title: 'All products',
-        products: validProducts
-      }];
+      return [
+        {
+          id: "section-all",
+          title: "All products",
+          products: validProducts,
+        },
+      ];
     }
 
     const sections = [];
@@ -757,9 +804,10 @@
       const matched = [];
 
       validProducts.forEach((product, productIndex) => {
-        const category = (product.category || '').toLowerCase();
-        const title = (product.title || '').toLowerCase();
-        const isMatch = category === normalizedItem || title.includes(normalizedItem);
+        const category = (product.category || "").toLowerCase();
+        const title = (product.title || "").toLowerCase();
+        const isMatch =
+          category === normalizedItem || title.includes(normalizedItem);
 
         if (isMatch) {
           matched.push(product);
@@ -771,17 +819,19 @@
         sections.push({
           id: `section-${index}`,
           title: label,
-          products: matched
+          products: matched,
         });
       }
     });
 
-    const unmatched = validProducts.filter((_, index) => !matchedIndexes.has(index));
+    const unmatched = validProducts.filter(
+      (_, index) => !matchedIndexes.has(index),
+    );
     if (unmatched.length) {
       sections.push({
-        id: 'section-more',
-        title: 'More products',
-        products: unmatched
+        id: "section-more",
+        title: "More products",
+        products: unmatched,
       });
     }
 
@@ -791,19 +841,23 @@
   // Filter out products without a valid URL
   function filterValidProducts(products) {
     if (!Array.isArray(products)) return [];
-    return products.filter(p => p && p.url && typeof p.url === 'string' && p.url.trim() !== '');
+    return products.filter(
+      (p) => p && p.url && typeof p.url === "string" && p.url.trim() !== "",
+    );
   }
 
   function buildProductSectionsFromResults(results) {
-    return results.map((group, index) => {
-      const label = group.item?.query || `Item ${index + 1}`;
-      const products = filterValidProducts(group.products);
-      return {
-        id: `section-${index}`,
-        title: label,
-        products
-      };
-    }).filter(section => section.products.length > 0);
+    return results
+      .map((group, index) => {
+        const label = group.item?.query || `Item ${index + 1}`;
+        const products = filterValidProducts(group.products);
+        return {
+          id: `section-${index}`,
+          title: label,
+          products,
+        };
+      })
+      .filter((section) => section.products.length > 0);
   }
 
   function countProductsFromResults(results) {
@@ -814,14 +868,14 @@
   }
 
   function expandAllSections(sections) {
-    expandedSections = new Set(sections.map(section => section.id));
+    expandedSections = new Set(sections.map((section) => section.id));
   }
 
   // Render a single expandable section
   function renderProductSection(section) {
     const isExpanded = expandedSections.has(section.id);
     const content = section.products.length
-      ? section.products.map(product => renderProductCard(product)).join('')
+      ? section.products.map((product) => renderProductCard(product)).join("")
       : `<div class="section-empty">No matches yet</div>`;
 
     return `
@@ -829,11 +883,11 @@
         <button class="section-toggle" data-section="${escapeHtml(section.id)}">
           <span class="section-toggle-title">${escapeHtml(toTitleCase(section.title))}</span>
           <span class="section-toggle-meta">${section.products.length}</span>
-          <span class="section-toggle-icon ${isExpanded ? 'expanded' : ''}">
+          <span class="section-toggle-icon ${isExpanded ? "expanded" : ""}">
             ${icons.chevronDown}
           </span>
         </button>
-        <div class="section-body ${isExpanded ? 'expanded' : 'collapsed'}">
+        <div class="section-body ${isExpanded ? "expanded" : "collapsed"}">
           <div class="products-list">
             ${content}
           </div>
@@ -847,19 +901,21 @@
     mountPanelInSidebar();
 
     // Attach CTA event listener
-    const ctaBtn = panel.querySelector('#shop-cta-btn');
+    const ctaBtn = panel.querySelector("#shop-cta-btn");
     if (ctaBtn) {
       // Remove existing listener to prevent duplicates
       ctaBtn.replaceWith(ctaBtn.cloneNode(true));
-      panel.querySelector('#shop-cta-btn').addEventListener('click', handleCTAClick);
+      panel
+        .querySelector("#shop-cta-btn")
+        .addEventListener("click", handleCTAClick);
     }
 
-    panel.classList.add('open');
+    panel.classList.add("open");
   }
 
   // Close the side panel
   function closePanel() {
-    panel.classList.remove('open');
+    panel.classList.remove("open");
   }
 
   // ============================================
@@ -869,41 +925,63 @@
   // Send frame to backend
   async function sendToBackend(frameBlob) {
     try {
-      console.log('[Shop the Frame] Calling sendToBackground...');
+      console.log("[Shop the Frame] Calling sendToBackground...");
       const data = await sendToBackground(frameBlob);
 
-      console.log('[Shop the Frame] === RESPONSE DEBUG ===');
-      console.log('[Shop the Frame] Raw data:', data);
-      console.log('[Shop the Frame] data type:', typeof data);
-      console.log('[Shop the Frame] data.results:', data?.results);
-      console.log('[Shop the Frame] data.results length:', data?.results?.length);
-      console.log('[Shop the Frame] data.frameItems:', data?.frameItems);
-      
+      console.log("[Shop the Frame] === RESPONSE DEBUG ===");
+      console.log("[Shop the Frame] Raw data:", data);
+      console.log("[Shop the Frame] data type:", typeof data);
+      console.log("[Shop the Frame] data.results:", data?.results);
+      console.log(
+        "[Shop the Frame] data.results length:",
+        data?.results?.length,
+      );
+      console.log("[Shop the Frame] data.frameItems:", data?.frameItems);
+
       if (data?.results?.[0]) {
-        console.log('[Shop the Frame] First result:', data.results[0]);
-        console.log('[Shop the Frame] First result products:', data.results[0].products);
-        console.log('[Shop the Frame] First result products length:', data.results[0].products?.length);
+        console.log("[Shop the Frame] First result:", data.results[0]);
+        console.log(
+          "[Shop the Frame] First result products:",
+          data.results[0].products,
+        );
+        console.log(
+          "[Shop the Frame] First result products length:",
+          data.results[0].products?.length,
+        );
       }
 
       // Process response
       currentResults = Array.isArray(data.results) ? data.results : [];
-      console.log('[Shop the Frame] currentResults set to:', currentResults.length, 'groups');
+      console.log(
+        "[Shop the Frame] currentResults set to:",
+        currentResults.length,
+        "groups",
+      );
 
       if (currentResults.length) {
         detectedItems = currentResults.map((group, index) => ({
-          item: group.item?.query || group.item?.item || `Item ${index + 1}`
+          item: group.item?.query || group.item?.item || `Item ${index + 1}`,
         }));
-        console.log('[Shop the Frame] detectedItems from results:', detectedItems);
+        console.log(
+          "[Shop the Frame] detectedItems from results:",
+          detectedItems,
+        );
       } else if (Array.isArray(data.frameItems)) {
         detectedItems = data.frameItems;
-        console.log('[Shop the Frame] detectedItems from frameItems:', detectedItems);
+        console.log(
+          "[Shop the Frame] detectedItems from frameItems:",
+          detectedItems,
+        );
       } else if (Array.isArray(data.detectedItems)) {
         detectedItems = data.detectedItems;
-        console.log('[Shop the Frame] detectedItems from detectedItems:', detectedItems);
+        console.log(
+          "[Shop the Frame] detectedItems from detectedItems:",
+          detectedItems,
+        );
       } else {
         // Generate detected items from products if not provided
         detectedItems = extractItemsFromProducts(data.products || []);
-        console.log('[Shop the Frame] detectedItems extracted:', detectedItems);
+        console.log("[Shop the Frame] detectedItems extracted:", detectedItems);
       }
 
       currentProducts = data.products || [];
@@ -915,32 +993,36 @@
 
       const totalCount = currentResults.length
         ? countProductsFromResults(currentResults)
-        : sections.reduce((total, section) => total + section.products.length, 0);
+        : sections.reduce(
+            (total, section) => total + section.products.length,
+            0,
+          );
 
-      console.log('[Shop the Frame] totalCount:', totalCount);
-      console.log('[Shop the Frame] sections:', sections);
+      console.log("[Shop the Frame] totalCount:", totalCount);
+      console.log("[Shop the Frame] sections:", sections);
 
       if (totalCount === 0) {
-        viewState = 'empty';
-        console.log('[Shop the Frame] Setting viewState to EMPTY');
+        viewState = "empty";
+        console.log("[Shop the Frame] Setting viewState to EMPTY");
       } else {
-        viewState = 'results';
-        console.log('[Shop the Frame] Setting viewState to RESULTS');
+        viewState = "results";
+        console.log("[Shop the Frame] Setting viewState to RESULTS");
       }
 
       updateCTAButton();
       updateDynamicContent();
-
     } catch (error) {
-      console.error('[Shop the Frame] API Error:', error);
-      console.error('[Shop the Frame] Error stack:', error.stack);
+      console.error("[Shop the Frame] API Error:", error);
+      console.error("[Shop the Frame] Error stack:", error.stack);
 
       // For demo: show placeholder products on network error
-      if (error.message.includes('Failed to fetch')) {
-        console.log('[Shop the Frame] Backend unavailable, showing demo products');
+      if (error.message.includes("Failed to fetch")) {
+        console.log(
+          "[Shop the Frame] Backend unavailable, showing demo products",
+        );
         loadDemoData();
       } else {
-        viewState = 'error';
+        viewState = "error";
         updateCTAButton();
         updateDynamicContent();
       }
@@ -950,10 +1032,10 @@
   function trackProductClick(productId, productUrl) {
     if (!productId) return;
     fetch(`${BASE_URL}/track`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
       body: JSON.stringify({
-        eventName: 'product_clicked',
+        eventName: "product_clicked",
         eventProps: { productId, productUrl },
       }),
     }).catch(() => {});
@@ -961,33 +1043,38 @@
 
   function sendToBackground(frameBlob) {
     if (!chrome?.runtime?.sendMessage) {
-      return Promise.reject(new Error('Extension runtime unavailable. Reload the extension.'));
+      return Promise.reject(
+        new Error("Extension runtime unavailable. Reload the extension."),
+      );
     }
 
     return new Promise((resolve, reject) => {
       // Convert blob to base64 for message passing (ArrayBuffer can't be serialized)
       const reader = new FileReader();
       reader.onload = () => {
-        const base64 = reader.result.split(',')[1]; // Remove data:image/...;base64, prefix
-        chrome.runtime.sendMessage({
-          type: 'shopFrame',
-          imageBase64: base64,
-          filename: 'frame.jpg',
-          mimeType: frameBlob.type || 'image/jpeg',
-          productSource: extensionSettings.productSource,
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          if (!response || !response.ok) {
-            reject(new Error(response?.error || 'Request failed'));
-            return;
-          }
-          resolve(response.data);
-        });
+        const base64 = reader.result.split(",")[1]; // Remove data:image/...;base64, prefix
+        chrome.runtime.sendMessage(
+          {
+            type: "shopFrame",
+            imageBase64: base64,
+            filename: "frame.jpg",
+            mimeType: frameBlob.type || "image/jpeg",
+            productSource: extensionSettings.productSource,
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "Request failed"));
+              return;
+            }
+            resolve(response.data);
+          },
+        );
       };
-      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.onerror = () => reject(new Error("Failed to read image"));
       reader.readAsDataURL(frameBlob);
     });
   }
@@ -995,11 +1082,11 @@
   // Extract item categories from products
   function extractItemsFromProducts(products) {
     const items = new Set();
-    products.forEach(p => {
+    products.forEach((p) => {
       if (p.category) items.add(p.category);
       else if (p.title) {
         // Extract first 2 words as a simple categorization
-        const words = p.title.split(' ').slice(0, 2).join(' ');
+        const words = p.title.split(" ").slice(0, 2).join(" ");
         items.add(words);
       }
     });
@@ -1012,49 +1099,65 @@
       "Black hoodie",
       "Wireless microphone",
       "Desk lamp",
-      "Headphones"
+      "Headphones",
     ];
 
     currentResults = [];
     currentProducts = [
       {
-        title: 'Premium Black Hoodie - Unisex Cotton Blend',
+        title: "Premium Black Hoodie - Unisex Cotton Blend",
         priceMin: 39,
         priceMax: 59,
-        image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop',
-        url: '#',
-        marketplace: extensionSettings.productSource === 'all' ? 'shopify' : extensionSettings.productSource,
+        image:
+          "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
+        url: "#",
+        marketplace:
+          extensionSettings.productSource === "all"
+            ? "shopify"
+            : extensionSettings.productSource,
       },
       {
-        title: 'Classic Black Pullover Hoodie',
+        title: "Classic Black Pullover Hoodie",
         priceMin: 45,
         priceMax: 65,
-        image: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=400&h=400&fit=crop',
-        url: '#',
-        marketplace: extensionSettings.productSource === 'all' ? 'shopify' : extensionSettings.productSource,
+        image:
+          "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=400&h=400&fit=crop",
+        url: "#",
+        marketplace:
+          extensionSettings.productSource === "all"
+            ? "shopify"
+            : extensionSettings.productSource,
       },
       {
-        title: 'Oversized Black Hoodie - Streetwear Style',
+        title: "Oversized Black Hoodie - Streetwear Style",
         priceMin: 52,
         priceMax: 78,
-        image: 'https://images.unsplash.com/photo-1578587018452-892bacefd3f2?w=400&h=400&fit=crop',
-        url: '#',
-        marketplace: extensionSettings.productSource === 'all' ? 'shopify' : extensionSettings.productSource,
+        image:
+          "https://images.unsplash.com/photo-1578587018452-892bacefd3f2?w=400&h=400&fit=crop",
+        url: "#",
+        marketplace:
+          extensionSettings.productSource === "all"
+            ? "shopify"
+            : extensionSettings.productSource,
       },
       {
-        title: 'Minimal Black Hoodie with Pocket',
+        title: "Minimal Black Hoodie with Pocket",
         priceMin: 38,
         priceMax: 55,
-        image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop',
-        url: '#',
-        marketplace: extensionSettings.productSource === 'all' ? 'shopify' : extensionSettings.productSource,
-      }
+        image:
+          "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
+        url: "#",
+        marketplace:
+          extensionSettings.productSource === "all"
+            ? "shopify"
+            : extensionSettings.productSource,
+      },
     ];
 
     selectedItemIndex = 0;
     const sections = buildProductSections(detectedItems, currentProducts);
     expandAllSections(sections);
-    viewState = 'results';
+    viewState = "results";
 
     updateCTAButton();
     updateDynamicContent();
@@ -1065,12 +1168,12 @@
   // ============================================
   async function getExtensionSettings() {
     if (!chrome?.storage?.local) {
-      return { enabled: true, productSource: 'shopify' };
+      return { enabled: true, productSource: "shopify" };
     }
 
     const values = await chrome.storage.local.get({
       [STORAGE_KEYS.enabled]: true,
-      [STORAGE_KEYS.productSource]: 'shopify',
+      [STORAGE_KEYS.productSource]: "shopify",
     });
 
     return {
@@ -1080,14 +1183,18 @@
   }
 
   function normalizeProductSource(source) {
-    if (source === 'amazon' || source === 'all') return source;
-    return 'shopify';
+    if (source === "amazon" || source === "all") return source;
+    return "shopify";
   }
 
   if (chrome?.storage?.onChanged) {
     chrome.storage.onChanged.addListener(async (changes, area) => {
-      if (area !== 'local') return;
-      if (!changes[STORAGE_KEYS.enabled] && !changes[STORAGE_KEYS.productSource]) return;
+      if (area !== "local") return;
+      if (
+        !changes[STORAGE_KEYS.enabled] &&
+        !changes[STORAGE_KEYS.productSource]
+      )
+        return;
 
       extensionSettings = await getExtensionSettings();
       if (!extensionSettings.enabled) {
@@ -1100,12 +1207,16 @@
   }
 
   // Wait for page to be ready, then initialize
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      init().catch((error) => console.error('[Shop the Frame] Init failed:', error));
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      init().catch((error) =>
+        console.error("[Shop the Frame] Init failed:", error),
+      );
     });
   } else {
-    init().catch((error) => console.error('[Shop the Frame] Init failed:', error));
+    init().catch((error) =>
+      console.error("[Shop the Frame] Init failed:", error),
+    );
   }
 
   // Re-initialize on YouTube SPA navigation
@@ -1113,14 +1224,19 @@
   new MutationObserver(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      if (location.href.includes('youtube.com/watch')) {
+      if (location.href.includes("youtube.com/watch")) {
         watchedVideo = null;
         lastAutoScanTime = null;
-        setTimeout(() => init().catch((error) => console.error('[Shop the Frame] Init failed:', error)), 1000);
+        setTimeout(
+          () =>
+            init().catch((error) =>
+              console.error("[Shop the Frame] Init failed:", error),
+            ),
+          1000,
+        );
         setTimeout(() => mountPanelInSidebar(), 1200);
         setTimeout(() => attachPauseTrigger(), 1200);
       }
     }
   }).observe(document.body, { subtree: true, childList: true });
-
 })();
