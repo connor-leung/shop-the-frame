@@ -1,0 +1,36 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    args:
+      - 'build'
+      - '--tag=$_IMAGE'
+      - './backend'
+
+  # Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args:
+      - 'push'
+      - '$_IMAGE'
+
+  # Deploy to Cloud Run, pulling secrets from Secret Manager
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'shop-the-frame-backend'
+      - '--image=$_IMAGE'
+      - '--region=northamerica-northeast2'
+      - '--platform=managed'
+      - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,API_KEY=API_KEY:latest,SHOPIFY_CLIENT_ID=SHOPIFY_CLIENT_ID:latest,SHOPIFY_CLIENT_SECRET=SHOPIFY_CLIENT_SECRET:latest'
+      - '--set-env-vars=USE_POSTGRES=true,PGSSL=true,NODE_ENV=production'
+      - '--allow-unauthenticated'
+
+substitutions:
+  _IMAGE: 'northamerica-northeast2-docker.pkg.dev/shop-the-frame/shop-the-frame-backend/backend:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
