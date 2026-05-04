@@ -1,7 +1,7 @@
 {
-  "name": "uoft-hacks-backend",
+  "name": "shop-the-frame-backend",
   "version": "1.0.0",
-  "description": "Express backend for UofT Hacks",
+  "description": "Express backend for shop the frame",
   "main": "dist/server.js",
   "type": "module",
   "engines": {

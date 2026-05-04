@@ -1,4 +1,4 @@
-# Shop the Frame (UofT Hacks)
+# Shop the Frame
 
 [![demo video](https://img.youtube.com/vi/0ceemUPquRQ/0.jpg)](https://www.youtube.com/watch?v=0ceemUPquRQ)
 
