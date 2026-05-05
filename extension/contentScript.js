@@ -17,6 +17,7 @@
   let currentProducts = [];
   let currentResults = [];
   let viewState = "idle"; // idle, loading, results, error, empty
+  let errorMessage = "";
   let expandedSections = new Set();
   let sidebarObserver = null;
   let watchedVideo = null;
@@ -387,8 +388,11 @@
     return `
       <div class="products-section">
         <div class="error-container">
-          <p class="error-message">${escapeHtml(message || "Couldn't identify products in this frame. Try another moment.")}</p>
-          <button class="try-again-btn" id="try-again-btn">Try another frame</button>
+          <p class="error-message">${escapeHtml(message || "Something went wrong. Please try again.")}</p>
+          <div class="error-actions">
+            <button class="retry-btn" id="retry-btn">Try again</button>
+            <button class="try-again-btn" id="try-again-btn">Use a different frame</button>
+          </div>
         </div>
       </div>
     `;
@@ -447,7 +451,7 @@
 
       case "error":
         html = renderItemChips(detectedItems, selectedItemIndex);
-        html += renderErrorState();
+        html += renderErrorState(errorMessage);
         break;
 
       case "empty":
@@ -524,7 +528,13 @@
       });
     });
 
-    // Try again button
+    // Retry button (re-runs the same frame)
+    const retryBtn = panel.querySelector("#retry-btn");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", handleRetry);
+    }
+
+    // Try again button (resets to idle to pick a new frame)
     const tryAgainBtn = panel.querySelector("#try-again-btn");
     if (tryAgainBtn) {
       tryAgainBtn.addEventListener("click", handleTryAgain);
@@ -616,9 +626,15 @@
     });
   }
 
-  // Handle try again click
+  // Handle retry click (re-runs analysis on the same frame)
+  async function handleRetry() {
+    await startAnalysis();
+  }
+
+  // Handle try again click (resets to idle to pick a new frame)
   function handleTryAgain() {
     viewState = "idle";
+    errorMessage = "";
     updateDynamicContent();
     updateCTAButton();
   }
@@ -1015,17 +1031,12 @@
       console.error("[Shop the Frame] API Error:", error);
       console.error("[Shop the Frame] Error stack:", error.stack);
 
-      // For demo: show placeholder products on network error
-      if (error.message.includes("Failed to fetch")) {
-        console.log(
-          "[Shop the Frame] Backend unavailable, showing demo products",
-        );
-        loadDemoData();
-      } else {
-        viewState = "error";
-        updateCTAButton();
-        updateDynamicContent();
-      }
+      errorMessage = error.message?.includes("Failed to fetch")
+        ? "Couldn't reach the server. Check your connection and try again."
+        : "Something went wrong. Please try again.";
+      viewState = "error";
+      updateCTAButton();
+      updateDynamicContent();
     }
   }
 

@@ -504,17 +504,40 @@ html[dark] {
   line-height: 1.5;
 }
 
+.error-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.retry-btn {
+  background: var(--primary);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: var(--primary-hover);
+}
+
 .try-again-btn {
   background: none;
   border: none;
   padding: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--primary);
+  color: var(--gray-600);
   cursor: pointer;
 }
 
 .try-again-btn:hover {
+  color: var(--gray-900);
   text-decoration: underline;
 }
 
